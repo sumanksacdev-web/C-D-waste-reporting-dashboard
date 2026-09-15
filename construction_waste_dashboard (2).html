@@ -1,0 +1,2059 @@
+<!DOCTYPE html>
+<html lang="en-AU">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Construction waste loads · TRASTE</title>
+<script>
+/* ======================= CONNECTION SETTINGS =======================
+   DATA_URL : the Apps Script web app URL (Deploy > Web app), ends in /exec
+   DATA_KEY : must be the same as ACCESS_KEY at the top of Code.gs
+   AUTO_REFRESH_MINUTES : how often an open dashboard checks the sheet (0 = off)
+   All data is read live from Google Sheets; nothing is stored in this file.
+==================================================================== */
+window.DASHBOARD_SETTINGS = {
+  DATA_URL: 'https://script.google.com/macros/s/AKfycbwmRQM8Neiyo2pNQ5CSq3RqROSJ5SlZwHkLqD3yDys0w7Xy-s7b05L-sfX4lN34Jgmvlg/exec',
+  DATA_KEY: 'GfHC3EGdTtWPwCxNDbqqrMHAQR0B',
+  AUTO_REFRESH_MINUTES: 15,
+};
+</script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@400;500;600&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/echarts/5.4.3/echarts.min.js"></script>
+<style>
+:root{
+  /* TRASTE brand palette */
+  --teal:#103849; --green:#80ED99; --mid:#00A8AB; --grey:#DADADA;
+  --indigo:#170055; --blue:#3E00FF; --purple:#AE00FB;
+  /* derived, for text on light surfaces (AA contrast) */
+  --mid-ink:#00777A; --purple-ink:#8300BD;
+  --page:#EDF0F0; --panel:#FFFFFF; --panel-2:#F5F7F7;
+  --ink:#103849; --ink-2:#33535F; --ink-3:#5B7480;
+  --line:rgba(16,56,73,.12); --line-2:rgba(16,56,73,.22);
+  --display:'Unbounded', 'Segoe UI', system-ui, sans-serif;
+  --body:'Manrope', 'Segoe UI', system-ui, sans-serif;
+  --head-h:0px;
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+html,body{margin:0}
+body{background:var(--page);color:var(--ink);font:14px/1.5 var(--body);font-variant-numeric:tabular-nums;-webkit-font-smoothing:antialiased}
+button,select,input{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--blue);outline-offset:2px}
+.app{display:flex;min-height:100vh}
+.sr-only{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+
+/* ---------- sidebar ---------- */
+.sidebar{flex:0 0 212px;background:var(--teal);color:#fff;position:sticky;top:0;height:100vh;display:flex;flex-direction:column;padding:26px 16px 20px}
+.wordmark{font-family:var(--display);font-weight:600;font-size:21px;letter-spacing:.2em;color:var(--green);padding:0 8px}
+.wordmark-sub{font-size:12px;color:rgba(255,255,255,.62);padding:6px 8px 0;line-height:1.45}
+.nav{list-style:none;margin:34px 0 0;padding:0;display:flex;flex-direction:column;gap:2px}
+.nav a{display:flex;align-items:center;gap:10px;padding:9px 10px;border-radius:6px;color:rgba(255,255,255,.72);text-decoration:none;font-weight:600;font-size:13px}
+.nav a::before{content:'';width:6px;height:6px;border-radius:50%;background:transparent;border:1.5px solid rgba(255,255,255,.35)}
+.nav a:hover{background:rgba(255,255,255,.06);color:#fff}
+.nav a.on{color:#fff;background:rgba(128,237,153,.1)}
+.nav a.on::before{background:var(--green);border-color:var(--green)}
+.side-fill{flex:1}
+.side-note{font-size:11.5px;line-height:1.55;color:rgba(255,255,255,.55);padding:0 8px}
+.side-note+.side-note{margin-top:10px}
+.side-note strong{color:rgba(255,255,255,.85);font-weight:600}
+
+/* ---------- main + sticky header ---------- */
+.main{flex:1;min-width:0;padding:0 28px 48px}
+.head{position:sticky;top:0;z-index:40;background:var(--page);margin:0 -28px;padding:18px 28px 12px;border-bottom:1px solid var(--line)}
+.head.scrolled{box-shadow:0 6px 16px -12px rgba(16,56,73,.35)}
+.titlebar{display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;margin-bottom:12px}
+h1{font-family:var(--display);font-weight:500;font-size:21px;letter-spacing:-.01em;margin:0}
+.source{display:flex;align-items:center;gap:10px;flex-wrap:wrap;min-width:0;max-width:100%}
+.source-pill{display:inline-flex;align-items:center;gap:8px;padding:6px 12px;border-radius:999px;background:var(--panel);border:1px solid var(--line);font-size:12px;color:var(--ink-2);max-width:460px}
+.source-pill span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--mid);flex:0 0 auto}
+.source-pill.loading .dot{background:#E3B341;animation:pulse 1s infinite}
+.source-pill.err{border-color:var(--purple);color:var(--purple-ink)}
+.source-pill.err .dot{background:var(--purple)}
+@keyframes pulse{50%{opacity:.35}}
+.btn{border:1px solid var(--line-2);background:var(--panel);padding:7px 14px;border-radius:6px;font-weight:700;font-size:12.5px;cursor:pointer}
+.btn:hover{border-color:var(--teal)}
+.btn.ghost{background:transparent}
+#refreshBtn{display:inline-flex;align-items:center;gap:6px}
+#refreshBtn:disabled{opacity:.6;cursor:progress}
+#refreshBtn.spin svg{animation:spin .9s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.source-pill.file .dot{background:var(--purple)}
+/* first load / setup / error */
+.stage{display:none}
+body.nodata .stage{display:block}
+body.nodata .main > section, body.nodata #footer, body.nodata .filters, body.nodata #chips, body.nodata #exportBtn{display:none !important}
+.stage-card{max-width:620px;margin:60px auto;background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:30px 32px;text-align:left}
+.stage-card h2{font-family:var(--display);font-weight:500;font-size:20px;margin:0 0 10px}
+.stage-card p,.stage-card li{color:var(--ink-2);font-size:14px;line-height:1.6}
+.stage-card ol{padding-left:20px;margin:10px 0 0}
+.stage-card code{background:var(--panel-2);padding:1px 6px;border-radius:4px;font-size:12.5px}
+.stage-actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:18px}
+.loader{width:34px;height:34px;border-radius:50%;border:3px solid var(--grey);border-top-color:var(--mid);animation:spin .8s linear infinite;margin-bottom:16px}
+.btn.primary{background:var(--teal);border-color:var(--teal);color:#fff}
+.btn.primary:hover{background:#174a5f}
+
+.filters{display:flex;flex-wrap:wrap;align-items:flex-end;gap:10px 12px}
+.f{display:flex;flex-direction:column;gap:3px;min-width:0}
+.f label,.f .lab{font-size:11.5px;font-weight:600;color:var(--ink-3)}
+.f select{height:32px;padding:0 28px 0 10px;border:1px solid var(--line-2);border-radius:6px;background:var(--panel) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M1 1l4 4 4-4' fill='none' stroke='%23103849' stroke-width='1.5'/%3E%3C/svg%3E") no-repeat right 10px center;appearance:none;font-size:12.5px;font-weight:600;max-width:230px;cursor:pointer}
+.f select.set{border-color:var(--teal);box-shadow:inset 0 0 0 1px var(--teal)}
+.seg{display:inline-flex;border:1px solid var(--line-2);border-radius:6px;overflow:hidden;background:var(--panel);height:32px}
+.seg button{border:0;background:transparent;padding:0 12px;font-weight:700;font-size:12.5px;cursor:pointer;color:var(--ink-2)}
+.seg button[aria-pressed="true"]{background:var(--teal);color:#fff}
+.f-clear{margin-left:auto}
+#clearBtn.armed{border-color:var(--purple);color:var(--purple-ink)}
+.chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
+.chips:empty{display:none}
+.chip{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line-2);background:var(--panel);border-radius:999px;padding:3px 6px 3px 10px;font-size:12px;font-weight:600}
+.chip button{border:0;background:var(--panel-2);border-radius:50%;width:18px;height:18px;line-height:16px;padding:0;cursor:pointer;font-size:13px;color:var(--ink-2)}
+.chip button:hover{background:var(--grey)}
+
+section{scroll-margin-top:calc(var(--head-h) + 16px)}
+
+/* ---------- hero ---------- */
+.hero{display:grid;grid-template-columns:minmax(230px,300px) minmax(0,1fr);gap:0;margin-top:22px;background:var(--panel);border:1px solid var(--line);border-radius:14px;overflow:hidden}
+.rate{background:var(--teal);color:#fff;padding:26px 26px 22px;display:flex;flex-direction:column}
+.rate-label{font-weight:600;font-size:13px;color:rgba(255,255,255,.75);margin:0}
+.rate-value{font-family:var(--display);font-weight:500;font-size:clamp(46px,5.4vw,66px);line-height:1;letter-spacing:-.03em;color:var(--green);margin:12px 0 22px}
+.rate-split{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin:0 0 18px;padding:14px 0 0;border-top:1px solid rgba(255,255,255,.14)}
+.rate-split dt{font-size:12px;color:rgba(255,255,255,.66);display:flex;align-items:center;gap:6px}
+.rate-split dt i{width:9px;height:9px;border-radius:2px;display:inline-block}
+.rate-split dd{margin:3px 0 0;font-family:var(--display);font-size:18px;font-weight:500}
+.rate-split .none-row{grid-column:1/-1}
+.rate-split .none-row dd{font-size:15px;color:rgba(255,255,255,.8)}
+.rate-note{font-size:12px;line-height:1.5;color:rgba(255,255,255,.62);margin:auto 0 0}
+.rate-bar{height:6px;border-radius:3px;background:rgba(255,255,255,.12);overflow:hidden;margin:6px 0 10px}
+.rate-bar b{display:block;height:100%;background:var(--green);border-radius:3px;transition:width .5s ease}
+
+.pile{display:grid;grid-template-columns:minmax(260px,1.05fr) minmax(250px,1fr);gap:8px 22px;padding:22px 26px 18px;align-items:center}
+.pile-head{grid-column:1/-1;display:flex;justify-content:space-between;align-items:baseline;gap:12px;flex-wrap:wrap}
+.pile-head h2{font-family:var(--display);font-weight:500;font-size:15px;margin:0}
+.muted{color:var(--ink-3);font-size:12px}
+.skip-wrap{position:relative}
+.skip{width:100%;height:auto;display:block;overflow:visible}
+.skip .layer{transition:opacity .2s}
+.skip.focus .layer{opacity:.3}
+.skip.focus .layer.on{opacity:1;stroke:#103849;stroke-width:3}
+.skip .strata{transform-box:fill-box;transform-origin:50% 100%}
+.skip.fill .strata{animation:fillup .9s cubic-bezier(.2,.7,.2,1) both}
+@keyframes fillup{from{transform:scaleY(0)}to{transform:scaleY(1)}}
+.skip-empty{position:absolute;inset:30% 18% auto;text-align:center;font-size:13px;color:var(--ink-3);background:rgba(255,255,255,.9);padding:8px;border-radius:6px}
+.mat-list{list-style:none;margin:0;padding:0;display:flex;flex-direction:column}
+.mat-list li button{width:100%;display:grid;grid-template-columns:12px 1fr auto 52px;gap:10px;align-items:center;padding:5px 8px;border:0;background:transparent;border-radius:5px;cursor:pointer;text-align:left;font-size:13px}
+.mat-list li button:hover,.mat-list li button.hl{background:var(--panel-2)}
+.mat-list li button[aria-pressed="true"]{background:rgba(0,168,171,.12);box-shadow:inset 0 0 0 1px rgba(0,168,171,.5)}
+.mat-list .sw{width:12px;height:12px;border-radius:3px}
+.mat-list .nm{font-weight:600}
+.mat-list .nm small{font-weight:600;color:var(--purple-ink);margin-left:6px;font-size:11px}
+.mat-list .v{color:var(--ink-2);text-align:right}
+.mat-list .p{font-weight:700;text-align:right}
+.mat-list li.zero{opacity:.45}
+
+.stats{grid-column:1/-1;display:grid;grid-template-columns:repeat(4,1fr);border-top:1px solid var(--line);margin:0 -26px -18px;padding:0}
+.stat{padding:14px 22px 16px 26px;border-right:1px solid var(--line)}
+.stat:last-child{border-right:0}
+.stat-v{font-family:var(--display);font-weight:500;font-size:22px;letter-spacing:-.01em;line-height:1.2}
+.stat-l{font-size:12.5px;font-weight:700;margin-top:2px}
+.stat-s{font-size:12px;color:var(--ink-3)}
+
+/* ---------- panels ---------- */
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:18px 20px;margin-top:18px}
+.row2{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:18px}
+.row2 > *{min-width:0}
+.row2 > .panel{margin-top:18px}
+.p-head{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap;margin-bottom:12px}
+.p-head h2{font-family:var(--display);font-weight:500;font-size:15px;margin:0 0 3px}
+.chart{width:100%}
+.empty{padding:40px 12px;text-align:center;color:var(--ink-3);font-size:13px}
+.legend-inline{display:flex;gap:14px;flex-wrap:wrap;font-size:12px;color:var(--ink-2);margin:-2px 0 6px}
+.legend-inline span{display:inline-flex;align-items:center;gap:6px}
+.legend-inline i{width:10px;height:10px;border-radius:2px;display:inline-block}
+.legend-inline i.line{height:3px;border-radius:2px}
+
+/* data tables (monthly, sites) */
+.dt-wrap{overflow:auto;border:1px solid var(--line);border-radius:8px}
+table.dt{width:100%;border-collapse:collapse;font-size:12.5px}
+.dt th{position:sticky;top:0;background:var(--panel-2);text-align:right;font-weight:700;color:var(--ink-2);padding:8px 10px;border-bottom:1px solid var(--line);white-space:nowrap;z-index:1}
+.dt td{padding:7px 10px;border-bottom:1px solid var(--line);text-align:right;white-space:nowrap}
+.dt th:first-child,.dt td:first-child{text-align:left}
+.dt tr.total td{font-weight:800;background:var(--panel-2);border-top:1px solid var(--line-2);position:sticky;bottom:0}
+.dt tbody tr.click{cursor:pointer}
+.dt tbody tr.click:hover td{background:rgba(0,168,171,.06)}
+.dt tbody tr.sel td{background:rgba(0,168,171,.12)}
+.dt td.heat{position:relative}
+.good{color:var(--mid-ink);font-weight:700}
+.bad{color:var(--purple-ink);font-weight:700}
+.site-cell{display:flex;flex-direction:column;white-space:normal;line-height:1.3;min-width:180px}
+.site-cell span{font-weight:600}
+.site-cell small{color:var(--ink-3);font-size:11.5px}
+.barcell{display:flex;align-items:center;gap:8px;justify-content:flex-end}
+.barcell i{display:block;height:6px;border-radius:3px;background:var(--teal);min-width:1px}
+.barcell .track{width:60px;background:var(--panel-2);border-radius:3px;display:flex}
+
+/* review list */
+.review{list-style:none;margin:0;padding:0;display:grid;gap:6px}
+.review button{width:100%;display:grid;grid-template-columns:56px 1fr;gap:12px;align-items:center;text-align:left;padding:9px 12px;border:1px solid var(--line);border-radius:8px;background:var(--panel);cursor:pointer}
+.review button:hover{border-color:var(--line-2);background:var(--panel-2)}
+.review button[aria-pressed="true"]{border-color:var(--purple);box-shadow:inset 3px 0 0 var(--purple)}
+.review .n{font-family:var(--display);font-weight:500;font-size:17px;text-align:right}
+.review .t{font-weight:700;font-size:13px;display:block}
+.review .h{font-size:12px;color:var(--ink-3)}
+.review button.none .n{color:var(--ink-3)}
+.review li.grp{font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-3);padding:6px 2px 0}
+.review li.grp:first-child{padding-top:0}
+.review button.fixed[aria-pressed="true"]{border-color:var(--mid);box-shadow:inset 3px 0 0 var(--mid)}
+.review button{padding:7px 12px}
+.fx{text-decoration:underline dotted rgba(0,119,122,.7);text-underline-offset:3px;cursor:help}
+
+/* ---------- loads table (virtualised) ---------- */
+.tools{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:10px}
+.search{height:34px;width:390px;max-width:100%;padding:0 12px 0 34px;border:1px solid var(--line-2);border-radius:6px;background:var(--panel) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' fill='none' stroke='%235B7480' stroke-width='2'%3E%3Ccircle cx='6' cy='6' r='4.5'/%3E%3Cpath d='M9.5 9.5L13 13'/%3E%3C/svg%3E") no-repeat 11px center}
+.lt-wrap{height:620px;overflow:auto;border:1px solid var(--line);border-radius:8px;position:relative}
+table.lt{border-collapse:separate;border-spacing:0;table-layout:fixed;width:100%;min-width:1000px;font-size:13px}
+.lt th{position:sticky;top:0;z-index:2;background:var(--panel-2);height:40px;padding:0 12px;text-align:left;font-weight:700;font-size:12px;color:var(--ink-2);border-bottom:1px solid var(--line-2);white-space:nowrap}
+.lt th button{border:0;background:none;padding:0;font:inherit;color:inherit;cursor:pointer;display:inline-flex;align-items:center;gap:4px}
+.lt th button::after{content:'';width:0;height:0;border:4px solid transparent;opacity:0}
+.lt th[aria-sort="ascending"] button::after{border-bottom-color:var(--ink);margin-top:-4px;opacity:1}
+.lt th[aria-sort="descending"] button::after{border-top-color:var(--ink);margin-top:4px;opacity:1}
+.lt th.r,.lt td.r{text-align:right}
+.lt th.r button{flex-direction:row-reverse}
+.lt tbody tr.row{height:48px;cursor:pointer}
+.lt td{height:48px;padding:0 12px;border-bottom:1px solid var(--line);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.lt tbody tr.row:hover td{background:rgba(0,168,171,.06)}
+.lt tbody tr.row:focus-visible{outline:none}
+.lt tbody tr.row:focus-visible td{background:rgba(62,0,255,.07);box-shadow:inset 0 2px 0 var(--blue),inset 0 -2px 0 var(--blue)}
+.lt .two{display:flex;flex-direction:column;line-height:1.3;min-width:0}
+.lt .two span,.lt .two small{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.lt .two span{font-weight:600}
+.lt .two small{font-size:12px;color:var(--ink-3)}
+.lt td.spacer{padding:0;border:0;height:auto}
+.lt .sub{color:var(--ink-3)}
+.flag{display:inline-block;font-size:11px;font-weight:700;padding:1px 7px;border-radius:999px;background:rgba(174,0,251,.1);color:var(--purple-ink)}
+.flag.soft{background:var(--panel-2);color:var(--ink-3)}
+.status{display:inline-flex;align-items:center;gap:6px;font-weight:600;font-size:12.5px}
+.status::before{content:'';width:8px;height:8px;border-radius:50%;background:var(--grey);box-shadow:inset 0 0 0 1px rgba(16,56,73,.25)}
+.status.ok::before{background:var(--mid);box-shadow:none}
+.status.pending{color:var(--ink-3)}
+.pics{display:inline-flex;gap:8px;color:var(--ink-2)}
+.pics svg{display:block}
+.pics .no{color:var(--grey)}
+.warn-strike{text-decoration:line-through;text-decoration-color:var(--purple);color:var(--ink-3)}
+
+/* ---------- modal ---------- */
+.overlay{position:fixed;inset:0;background:rgba(10,32,42,.55);display:none;align-items:flex-start;justify-content:center;padding:32px 20px;z-index:100;overflow-y:auto}
+.overlay.open{display:flex}
+.modal{background:var(--page);width:100%;max-width:920px;border-radius:14px;overflow:hidden;box-shadow:0 30px 60px -20px rgba(0,0,0,.45)}
+.overlay.open .modal{animation:rise .22s ease-out}
+@keyframes rise{from{transform:translateY(12px);opacity:0}}
+.m-head{background:var(--teal);color:#fff;padding:18px 22px 16px;display:grid;grid-template-columns:1fr auto;gap:10px 16px;align-items:start}
+.m-title{font-family:var(--display);font-weight:500;font-size:18px;line-height:1.3;margin:0}
+.m-sub{color:rgba(255,255,255,.7);font-size:13px;margin-top:3px}
+.m-nav{display:flex;align-items:center;gap:6px}
+.m-nav button{width:32px;height:32px;border-radius:6px;border:1px solid rgba(255,255,255,.25);background:transparent;color:#fff;cursor:pointer;font-size:16px;line-height:1}
+.m-nav button:hover:not(:disabled){background:rgba(255,255,255,.1)}
+.m-nav button:disabled{opacity:.35;cursor:default}
+.m-pos{font-size:12px;color:rgba(255,255,255,.7);margin-right:6px;white-space:nowrap}
+.m-tags{grid-column:1/-1;display:flex;gap:6px;flex-wrap:wrap}
+.tag{font-size:12px;font-weight:700;padding:3px 10px;border-radius:999px;background:rgba(255,255,255,.1);color:#fff}
+.tag.ok{background:var(--green);color:var(--teal)}
+.tag.fix{background:rgba(128,237,153,.16);color:var(--green);box-shadow:inset 0 0 0 1px rgba(128,237,153,.45)}
+.tag.warn{background:rgba(174,0,251,.28);color:#fff;box-shadow:inset 0 0 0 1px rgba(214,140,255,.6)}
+.m-body{padding:18px 22px 22px;display:grid;gap:16px}
+.facts{display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:var(--line);border:1px solid var(--line);border-radius:10px;overflow:hidden}
+.fact{background:var(--panel);padding:10px 14px}
+.fact dt{font-size:11.5px;font-weight:600;color:var(--ink-3)}
+.fact dd{margin:2px 0 0;font-weight:700;font-size:14px;overflow-wrap:anywhere}
+.fact dd.big{font-family:var(--display);font-weight:500;font-size:18px}
+.fact dd small{display:block;font-weight:500;font-size:11.5px;color:var(--ink-3)}
+#mDocketNote:empty{display:none}
+.fact dd.id{font-size:12px;font-weight:600;word-break:break-all}
+.docket-note{background:var(--panel);border:1px solid var(--line);border-left:3px solid var(--purple);border-radius:8px;padding:10px 14px;font-size:12.5px;color:var(--ink-2);white-space:pre-line}
+.docket-note b{color:var(--ink)}
+.photos{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.photo{background:var(--panel);border:1px solid var(--line);border-radius:10px;overflow:hidden;display:flex;flex-direction:column}
+.photo-cap{display:flex;justify-content:space-between;align-items:center;padding:8px 12px;font-weight:700;font-size:13px;gap:8px}
+.photo-cap a{font-size:12px;font-weight:600;color:var(--mid-ink)}
+.photo-frame{position:relative;aspect-ratio:4/3;max-height:300px;background:#0d2a36;display:flex;align-items:center;justify-content:center;border:0;padding:0;width:100%;cursor:zoom-in}
+.photo-frame img{width:100%;height:100%;object-fit:contain;display:block}
+.photo-frame .ph{color:rgba(255,255,255,.75);font-size:12.5px;text-align:center;padding:20px;line-height:1.5}
+.photo-frame .ph a{color:var(--green);font-weight:700}
+.photo-frame.static{cursor:default}
+.comp{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:14px 16px;display:grid;grid-template-columns:230px 1fr;gap:16px;align-items:center}
+.comp h3{grid-column:1/-1;margin:0;font-family:var(--display);font-weight:500;font-size:14px;display:flex;justify-content:space-between;align-items:baseline;gap:10px;flex-wrap:wrap}
+.comp table{width:100%;border-collapse:collapse;font-size:12.5px}
+.comp th{font-weight:700;color:var(--ink-3);text-align:right;padding:4px 8px;border-bottom:1px solid var(--line);font-size:11.5px}
+.comp td{padding:4px 8px;text-align:right;border-bottom:1px solid var(--line)}
+.comp th:first-child,.comp td:first-child{text-align:left}
+.comp td .sw{display:inline-block;width:9px;height:9px;border-radius:2px;margin-right:7px}
+.comp tr.zero td{color:var(--ink-3)}
+.comp tr.tot td{font-weight:800;border-bottom:0}
+.lightbox{position:fixed;inset:0;background:rgba(5,18,24,.92);z-index:120;display:none;flex-direction:column;align-items:center;justify-content:center;padding:20px}
+.lightbox.open{display:flex}
+.lightbox img{max-width:100%;max-height:calc(100vh - 90px);object-fit:contain}
+.lb-bar{display:flex;gap:14px;align-items:center;color:#fff;margin-top:12px;font-size:13px}
+.lb-bar a{color:var(--green);font-weight:700}
+.lb-bar button{border:1px solid rgba(255,255,255,.3);background:none;color:#fff;border-radius:6px;padding:6px 12px;cursor:pointer;font-weight:700}
+
+footer{margin-top:18px;font-size:12px;color:var(--ink-3);line-height:1.6}
+
+@media (max-width:1180px){
+  .hero{grid-template-columns:1fr}
+  .rate{display:grid;grid-template-columns:auto 1fr;column-gap:28px;align-items:end}
+  .rate-value{margin:6px 0 0;grid-row:span 2}
+  .rate-split{border-top:0;padding:0;margin:0}
+  .rate-note{grid-column:1/-1;margin-top:10px}
+  .rate-bar{grid-column:1/-1}
+}
+@media (max-width:980px){
+  .sidebar{display:none}
+  .main{padding:0 16px 40px}
+  .head{position:static;margin:0 -16px;padding:16px}
+  .row2{grid-template-columns:1fr}
+  .pile{grid-template-columns:1fr}
+  .stats{grid-template-columns:1fr 1fr}
+  .stat:nth-child(2){border-right:0}
+  .stat:nth-child(-n+2){border-bottom:1px solid var(--line)}
+  .facts{grid-template-columns:1fr 1fr}
+  .comp{grid-template-columns:1fr}
+  .f-clear{margin-left:0}
+}
+@media (max-width:620px){
+  .rate{display:flex;align-items:stretch}
+  .source-pill{flex:1 1 100%;max-width:100%;min-width:0}
+  .stage-card{margin:24px 0;padding:22px 20px}
+  .photos{grid-template-columns:1fr}
+  .f select{max-width:100%}
+  .overlay{padding:0}
+  .modal{border-radius:0}
+}
+@media (prefers-reduced-motion:reduce){
+  html{scroll-behavior:auto}
+  *,*::before,*::after{animation:none!important;transition:none!important}
+}
+</style>
+</head>
+<body class="nodata">
+<div class="app">
+  <aside class="sidebar" aria-label="Report navigation">
+    <div class="wordmark">TRASTE</div>
+    <div class="wordmark-sub">Cleanaway SA<br>Construction &amp; demolition loads</div>
+    <ul class="nav" id="nav">
+      <li><a href="#overview" class="on">Overview</a></li>
+      <li><a href="#monthly">Month by month</a></li>
+      <li><a href="#builders">Builders and sites</a></li>
+      <li><a href="#review">Data checks</a></li>
+      <li><a href="#loads">All loads</a></li>
+    </ul>
+    <div class="side-fill"></div>
+    <p class="side-note"><strong>How tonnes are split.</strong> Each load's docket weight is shared across materials by the recorded mix and each material's density. Everything except “Other” counts as recycled.</p>
+    <p class="side-note"><strong>Data fixes.</strong> Weights typed in kilograms are converted, net weights are read from docket-scan text, and mixes totalling 70–99% are scaled to 100%. Switch them off to see the sheet’s own figures.</p>
+  </aside>
+
+  <main class="main">
+    <header class="head" id="head">
+      <div class="titlebar">
+        <h1>Construction waste loads</h1>
+        <div class="source">
+          <span class="source-pill" id="sourcePill" role="status"><i class="dot"></i><span id="sourceText">Loading data…</span></span>
+          <button class="btn" id="refreshBtn" title="Read the latest data from Google Sheets"><svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" d="M20 12a8 8 0 1 1-2.34-5.66M20 4v4.5h-4.5"/></svg>Refresh</button>
+          <button class="btn ghost" id="loadBtn" title="Offline backup: open a Cleanaway SA .xlsx export instead of the live sheet">Open file</button>
+          <input type="file" id="fileInput" accept=".xlsx,.xls" hidden>
+          <button class="btn primary" id="exportBtn">Export CSV</button>
+        </div>
+      </div>
+      <div class="filters" role="group" aria-label="Filters">
+        <div class="f"><label for="fCompany">Builder</label><select id="fCompany"></select></div>
+        <div class="f"><label for="fSite">Site</label><select id="fSite"></select></div>
+        <div class="f"><label for="fFrom">From</label><select id="fFrom"></select></div>
+        <div class="f"><label for="fTo">To</label><select id="fTo"></select></div>
+        <div class="f"><label for="fDriver">Recorded by</label><select id="fDriver"></select></div>
+        <div class="f"><label for="fStatus">Approval</label><select id="fStatus">
+          <option value="all">All loads</option><option value="approved">Approved</option><option value="pending">Awaiting approval</option>
+        </select></div>
+        <div class="f"><label for="fMaterial">Contains</label><select id="fMaterial"></select></div>
+        <div class="f"><span class="lab" id="unitLab">Measure by</span>
+          <div class="seg" role="group" aria-labelledby="unitLab">
+            <button id="uT" aria-pressed="true">Tonnes</button><button id="uV" aria-pressed="false">Cubic metres</button>
+          </div>
+        </div>
+        <div class="f"><span class="lab" id="fixLab" title="Converts kilogram entries, reads net weights from scan text and scales 70–99% mixes to 100%. Off shows the sheet's own figures.">Data fixes</span>
+          <div class="seg" role="group" aria-labelledby="fixLab">
+            <button id="cOn" aria-pressed="true">Applied</button><button id="cOff" aria-pressed="false">Off (sheet)</button>
+          </div>
+        </div>
+        <div class="f f-clear"><span class="lab">&nbsp;</span><button class="btn" id="clearBtn">Clear filters</button></div>
+      </div>
+      <div class="chips" id="chips" aria-live="polite"></div>
+    </header>
+
+    <div class="stage" id="stage" aria-live="polite"></div>
+    <section id="overview" class="hero" aria-label="Overview">
+      <div class="rate">
+        <p class="rate-label">Diverted from landfill</p>
+        <p class="rate-value" id="rateValue">—</p>
+        <div class="rate-bar" aria-hidden="true"><b id="rateBar" style="width:0"></b></div>
+        <dl class="rate-split">
+          <div><dt><i style="background:var(--green)"></i>Recycled</dt><dd id="recValue">—</dd></div>
+          <div><dt><i style="background:var(--purple)"></i>Landfill</dt><dd id="landValue">—</dd></div>
+          <div id="noneRow" class="none-row"><dt><i style="background:var(--grey)"></i>Weighed, no material breakdown</dt><dd id="noneValue">—</dd></div>
+        </dl>
+        <p class="rate-note" id="rateNote"></p>
+      </div>
+      <div class="pile">
+        <div class="pile-head">
+          <h2>What's in the skips</h2>
+          <span class="muted" id="pileNote">Heaviest materials at the bottom. Select a material to filter.</span>
+        </div>
+        <div class="skip-wrap" id="skipWrap"></div>
+        <ul class="mat-list" id="matList"></ul>
+        <div class="stats" id="stats"></div>
+      </div>
+    </section>
+
+    <section id="monthly" class="panel">
+      <div class="p-head">
+        <div><h2>Month by month</h2><div class="muted" id="monthlyNote">Select a month to focus the report on it.</div></div>
+        <div class="seg" role="tablist" aria-label="Monthly view">
+          <button role="tab" data-view="trend" aria-pressed="true">Trend</button>
+          <button role="tab" data-view="summary" aria-pressed="false">Monthly summary</button>
+          <button role="tab" data-view="materials" aria-pressed="false">Material tonnes</button>
+        </div>
+      </div>
+      <div id="monthlyTrend">
+        <div class="legend-inline" id="trendLegend"></div>
+        <div id="trendChart" class="chart" style="height:320px"></div>
+      </div>
+      <div id="monthlySummary" hidden></div>
+      <div id="monthlyMaterials" hidden></div>
+    </section>
+
+    <section id="builders" class="row2" aria-label="Builders and sites">
+      <div class="panel">
+        <div class="p-head"><div><h2>Builders</h2><div class="muted" id="buildersNote">Largest 12 by tonnage. Select a bar to filter.</div></div></div>
+        <div class="legend-inline" id="builderLegend"></div>
+        <div id="builderChart" class="chart" style="height:380px"></div>
+      </div>
+      <div class="panel">
+        <div class="p-head"><div><h2>Sites</h2><div class="muted">Collection summary per site. Select a row to filter.</div></div></div>
+        <div class="dt-wrap" style="max-height:404px" id="siteTable"></div>
+      </div>
+    </section>
+
+    <section id="review" class="row2" aria-label="Data checks">
+      <div class="panel">
+        <div class="p-head"><div><h2>Data checks</h2><div class="muted">Loads that need a second look. Select one to list them below.</div></div></div>
+        <ul class="review" id="reviewList"></ul>
+      </div>
+      <div class="panel">
+        <div class="p-head"><div><h2>Loads by recorder</h2><div class="muted">Select a bar to filter.</div></div></div>
+        <div class="legend-inline"><span><i style="background:var(--mid)"></i>Approved</span><span><i style="background:var(--grey)"></i>Awaiting approval</span></div>
+        <div id="driverChart" class="chart" style="height:392px"></div>
+      </div>
+    </section>
+
+    <section id="loads" class="panel">
+      <div class="p-head"><div><h2>All loads</h2><div class="muted">Every load in the Waste Loads sheet. Select a row for photos and the full breakdown.</div></div></div>
+      <div class="tools">
+        <input type="search" class="search" id="search" placeholder="Search by site, builder, work order or name" aria-label="Search loads">
+        <span class="muted" id="tableCount"></span>
+      </div>
+      <div class="lt-wrap" id="ltWrap" tabindex="-1">
+        <table class="lt" aria-label="Waste loads" aria-rowcount="0" id="lt">
+          <colgroup>
+            <col style="width:104px"><col><col style="width:96px">
+            <col style="width:100px"><col style="width:100px"><col style="width:96px"><col style="width:15%">
+            <col style="width:108px"><col style="width:76px">
+          </colgroup>
+          <thead><tr id="ltHead"></tr></thead>
+          <tbody id="ltBody"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <footer id="footer"></footer>
+  </main>
+</div>
+
+<div class="overlay" id="overlay" aria-hidden="true">
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="mTitle">
+    <div class="m-head">
+      <div><h2 class="m-title" id="mTitle">Load</h2><div class="m-sub" id="mSub"></div></div>
+      <div class="m-nav">
+        <span class="m-pos" id="mPos"></span>
+        <button id="mPrev" aria-label="Previous load">&#8249;</button>
+        <button id="mNext" aria-label="Next load">&#8250;</button>
+        <button id="mClose" aria-label="Close">&times;</button>
+      </div>
+      <div class="m-tags" id="mTags"></div>
+    </div>
+    <div class="m-body">
+      <dl class="facts" id="mFacts"></dl>
+      <div id="mDocketNote"></div>
+      <div class="photos" id="mPhotos"></div>
+      <div class="comp" id="mComp"></div>
+    </div>
+  </div>
+</div>
+<div class="lightbox" id="lightbox" role="dialog" aria-modal="true" aria-label="Photo">
+  <img id="lbImg" alt="">
+  <div class="lb-bar"><span id="lbCap"></span><a id="lbLink" target="_blank" rel="noopener">Open original</a><button id="lbClose">Close</button></div>
+</div>
+
+<script>
+/* =====================================================================
+   CORE — pure data logic (no DOM). Shared by the embedded snapshot and
+   by workbooks loaded in the browser, so both follow identical rules.
+===================================================================== */
+const CONFIG = {
+  // Loads outside (0, MAX_LOAD_T] are shown and flagged but kept out of tonnage totals.
+  // Most out-of-range values look like kilograms typed into the tonnes field (e.g. 720, 1520).
+  MAX_LOAD_T: 30,
+  // Automatic corrections (switchable in the UI; off = figures identical to the sheet's own formulas)
+  KG_MIN: 100, KG_MAX: 30000,        // a "tonnes" value in this range is read as kilograms (720 -> 0.72 t)
+  MIX_SCALE_MIN: 70, MIX_SCALE_MAX: 130, // a mix totalling this much is scaled proportionally to 100%
+  TIME_ZONE: 'Australia/Adelaide',
+  LANDFILL_MATERIAL: 'Other',        // the only fraction counted as landfill (sheet: Recycled % = 1 − Other t ÷ Weight)
+  XLSX_CDN: 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js',
+};
+
+/* Materials are NOT fixed here: they come from the data. A material is any "<Name> (%)"
+   column in Waste Loads that has a row in the Density tab (order = sheet column order).
+   Only the look is configured: brand colours for known names, a palette for new ones.
+   `stack` = bottom-to-top order in the skip graphic: heaviest (by density) at the bottom. */
+const MATERIAL_COLORS = {
+  rubble:'#103849', concrete:'#5B7B88', metal:'#3E00FF', cardboard:'#7FD6D7', soil:'#170055',
+  gyprock:'#AEBDC2', timber:'#00A8AB', plastic:'#8E7CFF', greenwaste:'#80ED99', other:'#AE00FB',
+};
+const EXTRA_COLORS = ['#E3B341', '#4F7F91', '#D07CFF', '#2E6B5E', '#9FB5FF', '#C2410C', '#6B8E23', '#7A5C3E'];
+const MATERIALS = [];      // filled by setMaterials(); mutated in place so every reference stays valid
+let OTHER = -1;
+const AI_ALIASES = { building_rubble:'rubble', 'soil/fill_material':'soil', fill_material:'soil', soil_fill_material:'soil',
+  green_waste:'greenwaste', plasterboard:'gyprock', wood:'timber' };
+const matKey = s => String(s || '').toLowerCase().replace(/[^a-z0-9]+/g, '');
+
+function setMaterials(list){
+  const prev = MATERIALS.map(m => m.key).join('|');
+  const clean = (list || []).filter(m => m && m.name && typeof m.density === 'number' && m.density > 0);
+  if (!clean.length) throw new Error('No materials found: the Density tab needs a density for each "(%)" column in Waste Loads.');
+  let extra = 0;
+  const built = clean.map((m, i) => ({
+    key: String(m.name).trim(), density: m.density, col: i,
+    color: MATERIAL_COLORS[matKey(m.name)] || EXTRA_COLORS[extra++ % EXTRA_COLORS.length],
+  }));
+  [...built].sort((a, b) => b.density - a.density || a.col - b.col).forEach((m, rank) => { m.stack = rank; });
+  MATERIALS.length = 0;
+  built.forEach(m => MATERIALS.push(m));
+  OTHER = MATERIALS.findIndex(m => matKey(m.key) === matKey(CONFIG.LANDFILL_MATERIAL));
+  if (OTHER < 0) throw new Error(`The Density tab has no “${CONFIG.LANDFILL_MATERIAL}” material, which the recycling rate depends on.`);
+  return MATERIALS.map(m => m.key).join('|') !== prev;   // true when the material list changed
+}
+function aiMaterialIndex(key){
+  const k = String(key).trim().toLowerCase();
+  const want = matKey(AI_ALIASES[k] || k);
+  return MATERIALS.findIndex(m => matKey(m.key) === want);
+}
+/* legacy snapshots carried only a density map in column order */
+function materialsFromDensityMap(d){ return Object.keys(d || {}).map(name => ({ name, density: d[name] })); }
+
+const ISSUES = {
+  missing:     { label:'No weight recorded',          hint:'Weight is blank or 0 t' },
+  unreadable:  { label:'Docket weight not read',      hint:'The weight field holds text from the docket scan with no usable net weight' },
+  range:       { label:'Weight looks wrong',          hint:`Outside 0\u2013${CONFIG.MAX_LOAD_T} t, so left out of totals` },
+  composition: { label:'No usable material mix',      hint:'Percentages are blank or don\u2019t total 100%, so the weight can\u2019t be split' },
+  photo:       { label:'Photo missing',               hint:'No docket photo or no load photo' },
+  nosite:      { label:'No site linked',              hint:'Load isn\u2019t attached to a site' },
+  nodate:      { label:'No load date',                hint:'Record creation time is used instead' },
+  kgfix:       { label:'Weight converted from kg',    hint:`Recorded as ${CONFIG.KG_MIN}\u2013${CONFIG.KG_MAX.toLocaleString('en-AU')} \u201ctonnes\u201d, read as kilograms`, fixed:true },
+  textfix:     { label:'Weight read from scan text',  hint:'Net weight taken from the docket-scan text in the weight field', fixed:true },
+  mixfix:      { label:'Mix scaled to 100%',          hint:`Recorded mix totalled ${CONFIG.MIX_SCALE_MIN}\u201399%, scaled proportionally`, fixed:true },
+};
+
+/* ---------- small utils ---------- */
+function toNum(v){
+  if (typeof v === 'number') return Number.isFinite(v) ? v : null;
+  if (typeof v === 'string') {
+    const s = v.trim();
+    if (/^[-+]?\d+(\.\d+)?$/.test(s)) return parseFloat(s);
+  }
+  return null;
+}
+function cleanStr(v){
+  if (v === null || v === undefined) return null;
+  const s = String(v).trim();
+  return s ? s : null;
+}
+function idStr(v){
+  const n = toNum(v);
+  if (n !== null) return Number.isInteger(n) ? String(n) : String(n);
+  return cleanStr(v);
+}
+function companyKey(name){
+  return (name || '').toLowerCase().replace(/[^a-z0-9]+/g, '');
+}
+/* "Tandem Building Group – 15 Hawthorn Rd, Mount Barker" -> "15 Hawthorn Rd, Mount Barker" */
+function shortSite(site, company){
+  if (!site || !company) return site;
+  const ck = companyKey(company);
+  let acc = '', i = 0;
+  for (; i < site.length && acc.length < ck.length; i++) {
+    const ch = site[i].toLowerCase();
+    if (/[a-z0-9]/.test(ch)) acc += ch;
+  }
+  if (acc !== ck || /[a-z0-9]/i.test(site[i] || '')) return site;
+  let rest = site.slice(i).trim();
+  const wrapped = rest.startsWith('(') && rest.endsWith(')');
+  rest = rest.replace(/^[-\u2013\u2014:,(\s]+/, '');
+  if (wrapped) rest = rest.replace(/\)$/, '');
+  return rest.trim() || site;
+}
+function decList(s){
+  if (s === null || s === undefined) return null;
+  return String(s).split(',').map(x => x === '' ? null : Number(x));
+}
+function pad2(n){ return String(n).padStart(2, '0'); }
+
+/* ---------- dates (all values are wall-clock Adelaide strings: YYYY-MM-DDTHH:MM) ---------- */
+function serialToLocal(n){
+  const d = new Date(Math.round((n - 25569) * 86400000));
+  return `${d.getUTCFullYear()}-${pad2(d.getUTCMonth()+1)}-${pad2(d.getUTCDate())}T${pad2(d.getUTCHours())}:${pad2(d.getUTCMinutes())}`;
+}
+let _tzFmt = null;
+function isoToLocal(s){
+  const d = new Date(s);
+  if (isNaN(d)) return null;
+  if (!_tzFmt) _tzFmt = new Intl.DateTimeFormat('en-CA', { timeZone: CONFIG.TIME_ZONE, year:'numeric', month:'2-digit', day:'2-digit', hour:'2-digit', minute:'2-digit', hourCycle:'h23' });
+  const p = Object.fromEntries(_tzFmt.formatToParts(d).map(x => [x.type, x.value]));
+  return `${p.year}-${p.month}-${p.day}T${p.hour}:${p.minute}`;
+}
+function cellToLocal(v){
+  if (v === null || v === undefined || v === '') return null;
+  if (typeof v === 'number') return serialToLocal(v);
+  if (v instanceof Date) return isNaN(v) ? null : `${v.getFullYear()}-${pad2(v.getMonth()+1)}-${pad2(v.getDate())}T${pad2(v.getHours())}:${pad2(v.getMinutes())}`;
+  const s = String(v).trim();
+  if (/[zZ]$|[+-]\d\d:?\d\d$/.test(s)) return isoToLocal(s);
+  let m = /^(\d{4})-(\d\d)-(\d\d)(?:[T ](\d\d):(\d\d))?/.exec(s);
+  if (m) return `${m[1]}-${m[2]}-${m[3]}T${m[4] || '00'}:${m[5] || '00'}`;
+  m = /^(\d{1,2})\/(\d{1,2})\/(\d{4})/.exec(s);
+  if (m) return `${m[3]}-${pad2(m[2])}-${pad2(m[1])}T00:00`;
+  return null;
+}
+const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+function fmtDate(s){
+  if (!s) return '—';
+  return `${+s.slice(8,10)} ${MONTHS[+s.slice(5,7)-1]} ${s.slice(0,4)}`;
+}
+function fmtDateTime(s){
+  if (!s) return '—';
+  const h = +s.slice(11,13), mi = s.slice(14,16);
+  return `${fmtDate(s)}, ${(h % 12) || 12}:${mi} ${h < 12 ? 'am' : 'pm'}`;
+}
+function fmtMonth(ym, short){
+  if (!ym) return '—';
+  const y = ym.slice(0,4), m = MONTHS[+ym.slice(5,7)-1];
+  return short ? `${m} ${y.slice(2)}` : `${m} ${y}`;
+}
+function monthRange(a, b){
+  const out = [];
+  let y = +a.slice(0,4), m = +a.slice(5,7);
+  const by = +b.slice(0,4), bm = +b.slice(5,7);
+  while (y < by || (y === by && m <= bm)) {
+    out.push(`${y}-${pad2(m)}`);
+    m++; if (m > 12) { m = 1; y++; }
+  }
+  return out;
+}
+
+/* ---------- number formatting ---------- */
+function fmtNum(n, digits){
+  if (n === null || n === undefined || !Number.isFinite(n)) return '—';
+  const d = digits === undefined ? (Math.abs(n) >= 100 ? 0 : 1) : digits;
+  return n.toLocaleString('en-AU', { minimumFractionDigits: d, maximumFractionDigits: d });
+}
+function fmtPct(frac, digits){
+  if (frac === null || frac === undefined || !Number.isFinite(frac)) return '—';
+  return (frac * 100).toFixed(digits === undefined ? 1 : digits) + '%';
+}
+
+/* =====================================================================
+   ADAPTERS → raw records
+   raw = { id, site, company, account, date, weight, docket, photo, driver,
+           createdOn, approver, approvedOn, pct:[10], wo, ai:[10]|null }
+===================================================================== */
+function rawFromSnapshot(snap){
+  setMaterials(snap.materials || materialsFromDensityMap(snap.density));
+  const pick = (list, i) => (i === -1 || i === null || i === undefined) ? null : list[i];
+  const url = u => !u ? null : (/^https?:\/\//i.test(u) ? u : snap.urlPrefix + u);
+  return snap.rows.map(r => ({
+    id: r[0], site: pick(snap.sites, r[1]), company: pick(snap.companies, r[2]),
+    account: pick(snap.accounts, r[3]), date: r[4], weight: r[5],
+    docket: url(r[6]), photo: url(r[7]), driver: pick(snap.people, r[8]),
+    createdOn: r[9], approver: pick(snap.people, r[10]), approvedOn: r[11],
+    pct: decList(r[12]) || MATERIALS.map(() => null), wo: r[13], ai: decList(r[14]),
+  }));
+}
+
+function normHeader(k){ return String(k).replace(/[^\w()%#/ ]+/g, '').replace(/\s+/g, ' ').trim().toLowerCase(); }
+function sheetRows(XLSX, wb, name){
+  const want = name.toLowerCase();
+  const actual = wb.SheetNames.find(n => n.trim().toLowerCase() === want);
+  if (!actual) return null;
+  return XLSX.utils.sheet_to_json(wb.Sheets[actual], { defval:null, raw:true }).map(row => {
+    const o = {};
+    for (const k in row) o[normHeader(k)] = row[k];
+    return o;
+  });
+}
+function parseAi(v){
+  const s = cleanStr(v);
+  if (!s || s[0] !== '{') return null;
+  let j; try { j = JSON.parse(s); } catch (e) { return null; }
+  const out = MATERIALS.map(() => null);
+  let any = false;
+  for (const k in j) {
+    const i = aiMaterialIndex(k);
+    const n = typeof j[k] === 'number' && Number.isFinite(j[k]) ? j[k] : null;
+    if (i >= 0 && n !== null) { out[i] = (out[i] || 0) + n; any = true; }
+  }
+  return any ? out : null;
+}
+function sheetHeader(XLSX, wb, name){
+  const actual = wb.SheetNames.find(n => n.trim().toLowerCase() === name.toLowerCase());
+  const rows = actual ? XLSX.utils.sheet_to_json(wb.Sheets[actual], { header:1, blankrows:false }) : [];
+  return (rows[0] || []).map(h => h === null || h === undefined ? '' : String(h));
+}
+/* "<Name> (%)" headers that have a density, in column order */
+function materialsFromHeader(header, density){
+  const byKey = new Map(Object.keys(density).map(n => [matKey(n), n]));
+  const out = [], seen = new Set();
+  header.forEach(h => {
+    const m = /^(.*?)\s*\(%\)\s*$/.exec(String(h).trim());
+    if (!m) return;
+    const name = byKey.get(matKey(m[1]));
+    if (name && !seen.has(name)) { seen.add(name); out.push({ name, density: density[name] }); }
+  });
+  return out;
+}
+function rawFromWorkbook(XLSX, wb){
+  const loads = sheetRows(XLSX, wb, 'Waste Loads');
+  if (!loads) throw new Error('This workbook has no “Waste Loads” sheet.');
+  const need = ['load id', 'site name', 'weight (t)'];
+  const have = new Set(sheetHeader(XLSX, wb, 'Waste Loads').map(normHeader));
+  const missing = need.filter(h => !have.has(h));
+  if (missing.length) throw new Error('The Waste Loads sheet is missing column(s): ' + missing.join(', '));
+
+  const names = new Map();
+  (sheetRows(XLSX, wb, 'User Profiles Sheet') || []).forEach(p => {
+    const e = cleanStr(p['email']), n = cleanStr(p['name']);
+    if (e && n) names.set(e.toLowerCase(), n);
+  });
+  const person = v => { const e = cleanStr(v); return e ? (names.get(e.toLowerCase()) || e.split('@')[0]) : null; };
+
+  const density = {};
+  (sheetRows(XLSX, wb, 'Density') || []).forEach(d => {
+    const m = cleanStr(d['material']), v = toNum(d['density']);
+    if (m && v !== null) density[m] = v;
+  });
+  setMaterials(materialsFromHeader(sheetHeader(XLSX, wb, 'Waste Loads'), density));
+
+  const raws = [];
+  loads.forEach(r => {
+    const id = cleanStr(r['load id']);
+    if (!id || id.toUpperCase() === 'DONT DELETE ROW') return;
+    let weight = r['weight (t)'];
+    if (typeof weight === 'string') weight = weight.trim().slice(0, 400) || null;
+    raws.push({
+      id, site: cleanStr(r['site name']), company: cleanStr(r['company']),
+      account: idStr(r['account number']), date: cellToLocal(r['date']), weight,
+      docket: cleanStr(r['docket photo']), photo: cleanStr(r['waste load image']),
+      driver: person(r['created by']), createdOn: cellToLocal(r['created on']),
+      approver: person(r['approved by']), approvedOn: cellToLocal(r['approved on']),
+      pct: MATERIALS.map(m => toNum(r[normHeader(m.key + ' (%)')])),
+      wo: idStr(r['workorder (wo) #']), ai: parseAi(r['ai/text to json direct']),
+    });
+  });
+  return { raws, density };
+}
+
+/* =====================================================================
+   NORMALISE — applies the Waste Loads sheet's own formulas:
+     calculated only when weight is numeric, non-zero and the mix totals 100%
+     Volume (m³)   = Weight ÷ Σ(pct × density)
+     Material (t)  = Volume × pct × density
+     Recycled (%)  = 1 − Other (t) ÷ Weight
+   Dashboard rule on top: tonnage totals only use weights in (0, MAX_LOAD_T].
+===================================================================== */
+/* Pull a net weight (t) out of docket-scan text such as "11.20 - 7.56 = 3.64 Net weight: 3.64"
+   or "The Net weight is 4.90." Returns null for refusals, ambiguous lists and implausible values. */
+function netFromText(text){
+  const txt = String(text).replace(/,/g, ' ');
+  const ok = v => (Number.isFinite(v) && v > 0 && v <= CONFIG.MAX_LOAD_T) ? Math.round(v * 1000) / 1000 : null;
+  const unit = /^\s*(\d+(?:\.\d+)?)\s*(?:t|tonnes?)\s*\.?\s*$/i.exec(txt);
+  if (unit) return ok(Number(unit[1]));
+  // worked subtraction "gross - tare = net": the last one wins and it must add up
+  const subs = [...txt.matchAll(/(\d+(?:\.\d+)?)\s*t?\s*[-\u2212\u2013]\s*(\d+(?:\.\d+)?)\s*t?\s*=\s*(-?\d+(?:\.\d+)?)/g)];
+  if (subs.length) {
+    const [, a, b, c] = subs[subs.length - 1].map(Number);
+    return Math.abs(a - b - c) < 0.015 ? ok(c) : null;
+  }
+  const net = [...txt.matchAll(/\b(?:net(?:\s+weight)?|output)\s*(?:is|:|=)\s*(\d+(?:\.\d+)?)/gi)];
+  if (net.length) return ok(Number(net[net.length - 1][1]));
+  const g = /\bgross(?:\s+weight)?\s*(?:is|:|=)?\s*(\d+(?:\.\d+)?)/i.exec(txt);
+  const t = /\btare(?:\s+weight)?\s*(?:is|:|=)?\s*(\d+(?:\.\d+)?)/i.exec(txt);
+  if (g && t) return ok(Number(g[1]) - Number(t[1]));
+  return null;
+}
+
+function normalizeLoads(raws, densityOverride, opts){
+  const correct = !!(opts && opts.correct);
+  const dens = MATERIALS.map(m => {
+    const v = densityOverride && densityOverride[m.key];
+    return (typeof v === 'number' && v > 0) ? v : m.density;   // same source (Density tab) either way
+  });
+  // company display names: merge spelling variants (e.g. "Blu-Built" / "BluBuilt"), keep the most common label
+  const labelCounts = new Map();
+  raws.forEach(r => {
+    if (!r.company) return;
+    const k = companyKey(r.company);
+    if (!labelCounts.has(k)) labelCounts.set(k, new Map());
+    const m = labelCounts.get(k);
+    m.set(r.company, (m.get(r.company) || 0) + 1);
+  });
+  const companyLabel = new Map();
+  labelCounts.forEach((m, k) => companyLabel.set(k, [...m.entries()].sort((a, b) => b[1] - a[1])[0][0]));
+
+  return raws.map((r, i) => {
+    const pct = r.pct.map(p => (typeof p === 'number' && Number.isFinite(p)) ? p : null);
+    const pctTotal = pct.reduce((s, p) => s + (p || 0), 0);
+    const mixOk = Math.abs(pctTotal - 100) < 1e-9;
+
+    let w = null, wText = null;
+    if (typeof r.weight === 'number') w = Number.isFinite(r.weight) ? r.weight : null;
+    else if (typeof r.weight === 'string') { w = toNum(r.weight); if (w === null) wText = r.weight; }
+    const wRecorded = w;
+    let wFix = null, calcPct = pct, mixUsable = mixOk, mixFix = false;
+    if (correct) {
+      if (w === null && wText) {
+        const net = netFromText(wText);
+        if (net !== null) { w = net; wFix = 'text'; }
+      } else if (w !== null && w >= CONFIG.KG_MIN && w <= CONFIG.KG_MAX) {
+        w = w / 1000; wFix = 'kg';
+      }
+      if (!mixOk && pctTotal >= CONFIG.MIX_SCALE_MIN && pctTotal <= CONFIG.MIX_SCALE_MAX) {
+        calcPct = pct.map(p => p === null ? null : p * 100 / pctTotal);
+        mixUsable = true; mixFix = true;
+      }
+    }
+    let wState;
+    if (w === null) wState = wText ? 'unreadable' : 'missing';
+    else if (w === 0) wState = 'missing';
+    else if (w < 0 || w > CONFIG.MAX_LOAD_T) wState = 'range';
+    else wState = 'ok';
+
+    let vol = null, t = null, recRate = null;
+    if (w !== null && w !== 0 && mixUsable) {
+      const denom = calcPct.reduce((s, p, k) => s + (p || 0) / 100 * dens[k], 0);
+      if (denom > 0) {
+        vol = w / denom;
+        t = calcPct.map((p, k) => vol * (p || 0) / 100 * dens[k]);
+        recRate = 1 - t[OTHER] / w;
+      }
+    }
+    const inTotals = wState === 'ok';
+    const assessed = inTotals && t !== null;
+
+    const date = r.date || r.createdOn || null;
+    const ck = r.company ? companyKey(r.company) : '';
+    const company = r.company ? companyLabel.get(ck) : 'No builder linked';
+    const site = r.site || 'No site linked';
+    const issues = [];
+    if (wState !== 'ok') issues.push(wState);
+    if (!mixUsable) issues.push('composition');
+    if (!r.docket || !r.photo) issues.push('photo');
+    if (!r.site) issues.push('nosite');
+    if (!r.date) issues.push('nodate');
+    if (wFix === 'kg') issues.push('kgfix');
+    if (wFix === 'text') issues.push('textfix');
+    if (mixFix) issues.push('mixfix');
+
+    return {
+      i, id: r.id, site, siteShort: r.site ? shortSite(r.site, r.company) : site, siteKnown: !!r.site, company, companyKey: ck || '__none',
+      account: r.account, date, dateFromRecord: !r.date && !!date, month: date ? date.slice(0, 7) : null,
+      weightRaw: r.weight, w, wText, wState, wRecorded, wFix,
+      docket: r.docket, photo: r.photo,
+      driver: r.driver || 'Unknown', createdOn: r.createdOn,
+      approver: r.approver, approvedOn: r.approvedOn, approved: !!r.approvedOn,
+      pct, pctTotal, mixOk, mixUsable, mixFix, pctUsed: calcPct, vol, t, recRate, inTotals, assessed,
+      wo: r.wo, ai: r.ai, issues,
+      search: [r.id, site, company, r.driver, r.wo, r.account].filter(Boolean).join(' ').toLowerCase(),
+    };
+  });
+}
+
+/* ---------- aggregation ---------- */
+function emptyAgg(){
+  return { loads:0, approved:0, weighed:0, assessedLoads:0,
+    totalT:0, assessedT:0, recT:0, landT:0, totalV:0, recV:0, landV:0,
+    matT: MATERIALS.map(() => 0), matV: MATERIALS.map(() => 0),
+    first:null, last:null };
+}
+function addToAgg(a, l){
+  a.loads++;
+  if (l.approved) a.approved++;
+  if (l.date) {
+    if (!a.first || l.date < a.first) a.first = l.date;
+    if (!a.last || l.date > a.last) a.last = l.date;
+  }
+  if (l.inTotals) { a.weighed++; a.totalT += l.w; }
+  if (l.assessed) {
+    a.assessedLoads++;
+    a.assessedT += l.w;
+    a.landT += l.t[OTHER];
+    a.recT += l.w - l.t[OTHER];
+    a.totalV += l.vol;
+    const landV = l.vol * (l.pct[OTHER] || 0) / 100;
+    a.landV += landV;
+    a.recV += l.vol - landV;
+    for (let k = 0; k < MATERIALS.length; k++) {
+      a.matT[k] += l.t[k];
+      a.matV[k] += l.vol * (l.pct[k] || 0) / 100;
+    }
+  }
+  return a;
+}
+function aggregate(loads){ const a = emptyAgg(); loads.forEach(l => addToAgg(a, l)); return a; }
+function groupAgg(loads, keyFn){
+  const m = new Map();
+  loads.forEach(l => {
+    const k = keyFn(l);
+    if (!m.has(k)) m.set(k, emptyAgg());
+    addToAgg(m.get(k), l);
+  });
+  return m;
+}
+/* unit accessors: 't' (tonnes) or 'm3' (cubic metres; only loads with a breakdown have a volume) */
+function measure(a, unit){
+  const isT = unit === 't';
+  const rec = isT ? a.recT : a.recV;
+  const land = isT ? a.landT : a.landV;
+  return {
+    total: isT ? a.totalT : a.totalV,
+    rec, land,
+    unassessed: isT ? Math.max(0, a.totalT - a.assessedT) : null,
+    mat: isT ? a.matT : a.matV,
+    rate: (rec + land) > 0 ? rec / (rec + land) : null,
+    avg: isT ? (a.weighed ? a.totalT / a.weighed : null) : (a.assessedLoads ? a.totalV / a.assessedLoads : null),
+  };
+}
+
+if (typeof module !== 'undefined') {
+  module.exports = { CONFIG, MATERIALS, get OTHER(){ return OTHER; }, ISSUES, netFromText, setMaterials, materialsFromHeader, rawFromSnapshot, rawFromWorkbook, normalizeLoads,
+    aggregate, groupAgg, measure, shortSite, cellToLocal, fmtNum, fmtPct, fmtDate, fmtMonth, monthRange, parseAi };
+}
+
+</script>
+<script>
+/* =====================================================================
+   UI
+===================================================================== */
+const $ = id => document.getElementById(id);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const fmtInt = n => (n ?? 0).toLocaleString('en-AU');
+const REDUCED = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+const INK = '#103849', INK3 = '#5B7480', LINE = 'rgba(16,56,73,.12)';
+const C = { rec:'#00A8AB', land:'#AE00FB', none:'#DADADA', teal:'#103849' };
+const ALL = '__all';
+const SETTINGS = Object.assign({ DATA_URL:'', DATA_KEY:'', AUTO_REFRESH_MINUTES:15 }, window.DASHBOARD_SETTINGS || {});
+
+const state = {
+  loads: [], filtered: [], view: [],
+  source: null,
+  f: { company:ALL, site:ALL, from:ALL, to:ALL, driver:ALL, status:'all', material:-1, issue:null },
+  unit: 't', monthlyView: 'trend', search: '',
+  correct: true, raw: null,
+  live: { busy:false, sig:null, syncedAt:null, timer:null, lastError:null },          // correct = apply automatic data fixes (see CONFIG); raw = unnormalised rows
+  sort: { key:'date', dir:-1 },
+  months: [], charts: {}, hl: -1,
+  modalIdx: -1, lastFocus: null, animateSkip: true,
+  vStart: -1, vEnd: -1,
+};
+
+const fmtRec = v => fmtNum(v, Number.isInteger(v) ? 0 : 2);   // recorded values without padded zeros
+const unitSuffix = () => state.unit === 't' ? 't' : 'm³';
+const qty = (v, d) => (v === null || v === undefined) ? '—' : `${fmtNum(v, d)} ${unitSuffix()}`;
+const rateClass = r => r === null || r === undefined ? '' : (r >= 0.9 ? 'good' : (r < 0.75 ? 'bad' : ''));
+
+/* ---------- filtering ---------- */
+function passes(l, f, skip){
+  if (skip !== 'company' && f.company !== ALL && l.companyKey !== f.company) return false;
+  if (skip !== 'site' && f.site !== ALL && l.site !== f.site) return false;
+  if (skip !== 'month') {
+    if (f.from !== ALL && (!l.month || l.month < f.from)) return false;
+    if (f.to !== ALL && (!l.month || l.month > f.to)) return false;
+  }
+  if (skip !== 'driver' && f.driver !== ALL && l.driver !== f.driver) return false;
+  if (f.status === 'approved' && !l.approved) return false;
+  if (f.status === 'pending' && l.approved) return false;
+  if (skip !== 'material' && f.material >= 0 && !(l.pct[f.material] > 0)) return false;
+  if (skip !== 'issue' && f.issue && !l.issues.includes(f.issue)) return false;
+  return true;
+}
+const base = skip => state.loads.filter(l => passes(l, state.f, skip));
+
+/* ---------- data in ---------- */
+function loadRaws(parse, density, source, opts){
+  const before = MATERIALS.map(m => m.key).join('|');
+  const raws = parse();                       // parsing also sets the material list from the data
+  if (MATERIALS.map(m => m.key).join('|') !== before) { state.f.material = -1; state.hl = -1; }
+  state.raw = { raws, density };
+  state.density = density;
+  setData(normalizeLoads(raws, density, { correct: state.correct }), source, opts);
+}
+function setCorrections(on){
+  state.correct = on;
+  $('cOn').setAttribute('aria-pressed', String(on)); $('cOff').setAttribute('aria-pressed', String(!on));
+  if (!on && state.f.issue && ISSUES[state.f.issue].fixed) state.f.issue = null;
+  if (state.raw) setData(normalizeLoads(state.raw.raws, state.raw.density, { correct: on }), state.source, { refresh:true });
+}
+function setData(loads, source, opts){
+  const refresh = !!(opts && opts.refresh);
+  state.loads = loads;
+  state.source = source;
+  state.months = [...new Set(loads.map(l => l.month).filter(Boolean))].sort();
+  state.animateSkip = !refresh;
+  document.body.classList.remove('nodata');
+  populateOptions();
+  renderAll({ keepScroll: refresh });
+  showSourceStatus();
+  renderFooter();
+}
+const clock = d => d.toLocaleTimeString('en-AU', { hour:'numeric', minute:'2-digit' });
+function showSourceStatus(){
+  const src = state.source, n = state.loads.length;
+  if (!src) return;
+  const last = state.loads.reduce((m, l) => (l.date && (!m || l.date > m)) ? l.date : m, null);
+  const detail = `${src.name}: ${fmtInt(n)} loads, latest load ${fmtDate(last)}`;
+  if (src.kind === 'live') {
+    const err = state.live.lastError;
+    if (err) setSource('err', `Couldn\u2019t refresh, showing data from ${clock(state.live.syncedAt)}`, err);
+    else setSource('ok', `Live \u00b7 ${fmtInt(n)} loads \u00b7 synced ${clock(state.live.syncedAt)}`,
+      `${detail}. Read from Google Sheets at ${state.live.syncedAt.toLocaleString('en-AU')}` +
+      (SETTINGS.AUTO_REFRESH_MINUTES > 0 ? `. Checks for changes every ${SETTINGS.AUTO_REFRESH_MINUTES} minutes.` : ''));
+  } else {
+    setSource('file', `File \u00b7 ${fmtInt(n)} loads \u00b7 live updates paused`, `${detail}. Opened from your computer at ${clock(new Date())}. Live updates are paused; select Refresh to go back to Google Sheets.`);
+  }
+}
+function setSource(kind, text, title){
+  const p = $('sourcePill');
+  p.className = 'source-pill ' + (kind === 'ok' ? '' : kind);
+  $('sourceText').textContent = text;
+  p.title = title || text;
+}
+
+/* ---------- filter options ---------- */
+function fillSelect(sel, options, value, allLabel){
+  sel.innerHTML = (allLabel ? `<option value="${ALL}">${esc(allLabel)}</option>` : '') +
+    options.map(o => `<option value="${esc(o.v)}">${esc(o.t)}</option>`).join('');
+  const ok = value === ALL || options.some(o => String(o.v) === String(value));
+  sel.value = ok ? value : ALL;
+  sel.classList.toggle('set', sel.value !== ALL && sel.value !== 'all' && sel.value !== '-1');
+  return sel.value;
+}
+function populateOptions(){
+  const f = state.f, L = state.loads;
+  const comps = new Map();
+  L.forEach(l => comps.set(l.companyKey, l.company));
+  const compOpts = [...comps.entries()].map(([v, t]) => ({ v, t }))
+    .sort((a, b) => (a.v === '__none') - (b.v === '__none') || a.t.localeCompare(b.t));
+  f.company = fillSelect($('fCompany'), compOpts, f.company, 'All builders');
+
+  const inComp = L.filter(l => f.company === ALL || l.companyKey === f.company);
+  const sites = [...new Set(inComp.map(l => l.site))]
+    .sort((a, b) => (a === 'No site linked') - (b === 'No site linked') || a.localeCompare(b));
+  f.site = fillSelect($('fSite'), sites.map(s => ({ v:s, t:s })), f.site, 'All sites');
+
+  const inSite = inComp.filter(l => f.site === ALL || l.site === f.site);
+  const drivers = [...new Set(inSite.map(l => l.driver))].sort((a, b) => a.localeCompare(b));
+  f.driver = fillSelect($('fDriver'), drivers.map(d => ({ v:d, t:d })), f.driver, 'Everyone');
+
+  const monthOpts = state.months.map(m => ({ v:m, t:fmtMonth(m) }));
+  f.from = fillSelect($('fFrom'), monthOpts, f.from, 'Earliest');
+  f.to = fillSelect($('fTo'), monthOpts, f.to, 'Latest');
+
+  const st = $('fStatus'); st.value = f.status; st.classList.toggle('set', f.status !== 'all');
+  const mat = $('fMaterial');
+  mat.innerHTML = `<option value="-1">Any material</option>` + MATERIALS.map((m, k) => `<option value="${k}">${m.key}</option>`).join('');
+  mat.value = String(f.material); mat.classList.toggle('set', f.material >= 0);
+}
+
+/* ---------- chips + clear ---------- */
+function activeChips(){
+  const f = state.f, chips = [];
+  if (f.company !== ALL) chips.push({ k:'company', t:`Builder: ${state.loads.find(l => l.companyKey === f.company)?.company || f.company}` });
+  if (f.site !== ALL) chips.push({ k:'site', t:`Site: ${f.site}` });
+  if (f.from !== ALL || f.to !== ALL) {
+    const t = (f.from !== ALL && f.from === f.to) ? fmtMonth(f.from) : `${f.from === ALL ? 'Earliest' : fmtMonth(f.from)} to ${f.to === ALL ? 'latest' : fmtMonth(f.to)}`;
+    chips.push({ k:'month', t:`Period: ${t}` });
+  }
+  if (f.driver !== ALL) chips.push({ k:'driver', t:`Recorded by: ${f.driver}` });
+  if (f.status !== 'all') chips.push({ k:'status', t: f.status === 'approved' ? 'Approved only' : 'Awaiting approval only' });
+  if (f.material >= 0) chips.push({ k:'material', t:`Contains ${MATERIALS[f.material].key.toLowerCase()}` });
+  if (f.issue) chips.push({ k:'issue', t:`Check: ${ISSUES[f.issue].label}` });
+  if (state.search.trim()) chips.push({ k:'search', t:`Search: “${state.search.trim()}”` });
+  return chips;
+}
+function clearOne(k){
+  const f = state.f;
+  if (k === 'month') { f.from = ALL; f.to = ALL; }
+  else if (k === 'status') f.status = 'all';
+  else if (k === 'material') f.material = -1;
+  else if (k === 'issue') f.issue = null;
+  else if (k === 'search') { state.search = ''; $('search').value = ''; }
+  else f[k] = ALL;
+  update();
+}
+function renderChips(){
+  const chips = activeChips();
+  $('chips').innerHTML = chips.map(c => `<span class="chip">${esc(c.t)}<button data-k="${c.k}" aria-label="Remove ${esc(c.t)}">&times;</button></span>`).join('');
+  const b = $('clearBtn');
+  b.textContent = chips.length ? `Clear filters (${chips.length})` : 'Clear filters';
+  b.classList.toggle('armed', chips.length > 0);
+}
+const DEFAULT_FILTERS = { company:ALL, site:ALL, from:ALL, to:ALL, driver:ALL, status:'all', material:-1, issue:null };
+function clearAll(){
+  Object.assign(state.f, DEFAULT_FILTERS);   // mutate in place: event handlers hold a reference to state.f
+  state.search = ''; $('search').value = '';
+  update();
+}
+function update(opts){
+  populateOptions();
+  renderAll(opts);
+}
+
+/* ---------- orchestration ---------- */
+function renderAll(opts){
+  state.filtered = state.loads.filter(l => passes(l, state.f));
+  const A = aggregate(state.filtered);
+  renderChips();
+  renderHero(A);
+  renderMonthly();
+  renderBuilders();
+  renderSites();
+  renderReview();
+  renderDrivers();
+  applyTable(!(opts && opts.keepScroll));
+}
+
+/* =====================================================================
+   HERO — rate block, skip cross-section, material list, stats
+===================================================================== */
+function renderHero(A){
+  const m = measure(A, state.unit);
+  $('rateValue').textContent = m.rate === null ? '—' : fmtPct(m.rate);
+  $('rateBar').style.width = m.rate === null ? '0' : (m.rate * 100).toFixed(1) + '%';
+  $('recValue').textContent = qty(m.rec);
+  $('landValue').textContent = qty(m.land);
+  $('noneRow').hidden = state.unit !== 't';
+  $('noneValue').textContent = qty(m.unassessed);
+  $('rateNote').textContent = state.unit === 't'
+    ? (A.totalT > 0
+        ? `Based on the ${fmtNum(A.assessedT, 0)} t with a usable material breakdown, ${fmtPct(A.assessedT / A.totalT, 0)} of the ${fmtNum(A.totalT, 0)} t collected.${state.correct ? ' Data fixes applied.' : ' Sheet figures, no data fixes.'}`
+        : 'No loads with a usable weight match these filters.')
+    : (A.assessedLoads ? `By volume, across the ${fmtInt(A.assessedLoads)} loads with a full material breakdown.` : 'No loads with a full material breakdown match these filters.');
+
+  renderSkip(m.mat);
+  const total = m.mat.reduce((s, v) => s + v, 0);
+  const order = MATERIALS.map((x, k) => k).sort((a, b) => MATERIALS[b].stack - MATERIALS[a].stack);
+  $('matList').innerHTML = order.map(k => {
+    const v = m.mat[k], share = total ? v / total : 0;
+    const on = state.f.material === k;
+    return `<li class="${v > 0 ? '' : 'zero'}"><button data-k="${k}" aria-pressed="${on}" title="${on ? 'Show all materials' : 'Only loads containing ' + MATERIALS[k].key.toLowerCase()}">
+      <i class="sw" style="background:${MATERIALS[k].color}"></i>
+      <span class="nm">${MATERIALS[k].key}${k === OTHER ? '<small>landfill</small>' : ''}</span>
+      <span class="v">${qty(v)}</span><span class="p">${total ? fmtPct(share, share < 0.1 ? 1 : 0) : '—'}</span></button></li>`;
+  }).join('');
+  $('pileNote').textContent = state.unit === 't'
+    ? 'Share of tonnage, heaviest materials at the bottom. Select a material to filter.'
+    : 'Share of volume, heaviest materials at the bottom. Select a material to filter.';
+
+  const sites = new Set(state.filtered.filter(l => l.siteKnown).map(l => l.site)).size;
+  const builders = new Set(state.filtered.filter(l => l.companyKey !== '__none').map(l => l.companyKey)).size;
+  const months = A.first ? monthRange(A.first.slice(0, 7), A.last.slice(0, 7)).length : 0;
+  const stats = [
+    { v: qty(m.total), l: state.unit === 't' ? 'Collected' : 'Volume collected',
+      s: state.unit === 't' ? `${fmtInt(A.weighed)} weighed loads, ${m.avg === null ? '—' : fmtNum(m.avg, 2) + ' t'} average`
+                            : `${fmtInt(A.assessedLoads)} loads, ${m.avg === null ? '—' : fmtNum(m.avg, 1) + ' m³'} average` },
+    { v: fmtInt(A.loads), l: 'Loads', s: `${fmtInt(A.approved)} approved${A.loads ? ` (${fmtPct(A.approved / A.loads, 0)})` : ''}` },
+    { v: fmtInt(sites), l: 'Sites', s: `${fmtInt(builders)} builder${builders === 1 ? '' : 's'}` },
+    { v: months ? `${months} month${months === 1 ? '' : 's'}` : '—', l: 'Period', s: A.first ? `${fmtDate(A.first)} to ${fmtDate(A.last)}` : 'No dated loads' },
+  ];
+  $('stats').innerHTML = stats.map(s => `<div class="stat"><div class="stat-v">${esc(s.v)}</div><div class="stat-l">${s.l}</div><div class="stat-s">${esc(s.s)}</div></div>`).join('');
+}
+
+/* Skip bin side profile. Layers are area-proportional inside the tapered body. */
+function renderSkip(mat){
+  const W = 400, TOP = 36, BOT = 250, H = BOT - TOP;
+  const a = 372, b = 252;                 // wall width at top / bottom
+  const wl = y => (W - a) / 2 + ((a - b) / 2) * (y - TOP) / H;
+  const wr = y => W - wl(y);
+  const wall = `${wl(TOP)},${TOP} ${wr(TOP)},${TOP} ${wr(BOT)},${BOT} ${wl(BOT)},${BOT}`;
+  // contents sit inside the steel with a small gap
+  const G = 9, cT = TOP + 4, cB = BOT - G, cH = cB - cT;
+  const ca = a - 2 * G - ((a - b) / 2) * (4 / H) * 2, cb = b - 2 * G + ((a - b) / 2) * (G / H) * 2;
+  const cl = y => (W - ca) / 2 + ((ca - cb) / 2) * (y - cT) / cH;
+  const cr = y => W - cl(y);
+  const inner = `${cl(cT)},${cT} ${cr(cT)},${cT} ${cr(cB)},${cB} ${cl(cB)},${cB}`;
+  const k = (ca - cb) / (2 * cH), Atot = (ca + cb) * cH / 2;
+  const hAt = F => k === 0 ? F * cH : (-cb + Math.sqrt(cb * cb + 4 * k * F * Atot)) / (2 * k);
+
+  const total = mat.reduce((s, v) => s + v, 0);
+  const order = MATERIALS.map((x, i) => i).sort((p, q) => MATERIALS[p].stack - MATERIALS[q].stack);
+  let cum = 0, layers = '', seams = '';
+  if (total > 0) {
+    order.forEach(i => {
+      const v = mat[i];
+      if (!(v > 0)) return;
+      const f0 = cum / total; cum += v; const f1 = cum / total;
+      const y1 = cB - hAt(f0), y0 = cB - hAt(f1);
+      layers += `<rect class="layer${state.f.material === i ? ' on' : ''}" data-k="${i}" x="0" y="${y0.toFixed(2)}" width="${W}" height="${Math.max(0.6, y1 - y0).toFixed(2)}" fill="${MATERIALS[i].color}"><title>${MATERIALS[i].key}: ${qty(v)} (${fmtPct(v / total)})</title></rect>`;
+      if (f1 < 0.9999) seams += `<line x1="0" x2="${W}" y1="${y0.toFixed(2)}" y2="${y0.toFixed(2)}" stroke="#fff" stroke-width="1.2" stroke-opacity=".9"/>`;
+    });
+  }
+  const lugY = 112;
+  const focus = state.f.material >= 0;
+  const svg = `<svg class="skip${focus ? ' focus' : ''}${state.animateSkip && !REDUCED ? ' fill' : ''}" viewBox="-6 14 ${W + 12} 262" role="img" aria-label="Skip cross-section showing each material's share">
+    <defs><clipPath id="skipClip"><polygon points="${inner}"/></clipPath></defs>
+    <rect x="-6" y="265" width="${W + 12}" height="1.5" fill="${LINE}"/>
+    <rect x="${wl(BOT) + 22}" y="${BOT + 3}" width="40" height="12" rx="2" fill="${INK}"/>
+    <rect x="${wr(BOT) - 62}" y="${BOT + 3}" width="40" height="12" rx="2" fill="${INK}"/>
+    <polygon points="${wall}" fill="#fff" stroke="${INK}" stroke-width="6" stroke-linejoin="round"/>
+    <polygon points="${inner}" fill="#EEF2F2"/>
+    <g clip-path="url(#skipClip)"><g class="strata">${layers}${seams}</g></g>
+    <rect x="${wl(TOP) - 10}" y="${TOP - 12}" width="${a + 20}" height="10" rx="3" fill="${INK}"/>
+    <circle cx="${wl(lugY) - 12}" cy="${lugY}" r="8" fill="#fff" stroke="${INK}" stroke-width="4"/>
+    <circle cx="${wr(lugY) + 12}" cy="${lugY}" r="8" fill="#fff" stroke="${INK}" stroke-width="4"/>
+  </svg>${total > 0 ? '' : '<div class="skip-empty">No loads with a full material breakdown match these filters.</div>'}`;
+  $('skipWrap').innerHTML = svg;
+  state.animateSkip = false;
+}
+function setHighlight(k){
+  if (state.hl === k) return;
+  state.hl = k;
+  const svg = $('skipWrap').querySelector('svg');
+  const active = k >= 0 ? k : state.f.material;
+  if (svg) {
+    svg.classList.toggle('focus', active >= 0);
+    svg.querySelectorAll('.layer').forEach(r => r.classList.toggle('on', +r.dataset.k === active));
+  }
+  document.querySelectorAll('#matList button').forEach(b => b.classList.toggle('hl', +b.dataset.k === k));
+}
+function toggleMaterial(k){
+  state.f.material = state.f.material === k ? -1 : k;
+  state.hl = -1;
+  update();
+}
+
+/* =====================================================================
+   ECharts helpers
+===================================================================== */
+function chart(id){
+  if (!window.echarts) return null;
+  if (!state.charts[id]) state.charts[id] = echarts.init($(id), null, { renderer:'canvas' });
+  return state.charts[id];
+}
+function chartEmpty(id, msg){
+  const c = state.charts[id];
+  if (c) { c.dispose(); delete state.charts[id]; }
+  $(id).innerHTML = `<div class="empty">${esc(msg)}</div>`;
+}
+const baseOpt = () => ({
+  animation: !REDUCED, animationDuration: 400,
+  textStyle: { fontFamily:'Manrope, Segoe UI, sans-serif', color: INK },
+  tooltip: { backgroundColor:'#fff', borderColor: LINE, textStyle:{ color: INK, fontSize:12 }, extraCssText:'box-shadow:0 8px 24px -10px rgba(16,56,73,.35);border-radius:8px;' },
+});
+const sw = c => `<i style="display:inline-block;width:9px;height:9px;border-radius:2px;background:${c};margin-right:6px"></i>`;
+
+/* =====================================================================
+   MONTHLY
+===================================================================== */
+function renderMonthly(){
+  const v = state.monthlyView;
+  $('monthlyTrend').hidden = v !== 'trend';
+  $('monthlySummary').hidden = v !== 'summary';
+  $('monthlyMaterials').hidden = v !== 'materials';
+  document.querySelectorAll('#monthly [data-view]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.view === v)));
+  $('monthlyNote').textContent = v === 'trend' ? 'Select a month to focus the report on it. Select it again to clear.' :
+    (v === 'summary' ? 'Totals for each month in the current selection.' : `Material ${state.unit === 't' ? 'tonnes' : 'volume (m³)'} for each month, from loads with a full breakdown.`);
+  if (v === 'trend') renderTrend();
+  else if (v === 'summary') renderMonthlySummary();
+  else renderMonthlyMaterials();
+}
+function monthGroups(loads){
+  const g = groupAgg(loads.filter(l => l.month), l => l.month);
+  const keys = [...g.keys()].sort();
+  const months = keys.length ? monthRange(keys[0], keys[keys.length - 1]) : [];
+  return { g, months };
+}
+function renderTrend(){
+  const loads = base('month');
+  const { g, months } = monthGroups(loads);
+  const isT = state.unit === 't';
+  $('trendLegend').innerHTML = `<span><i style="background:${C.rec}"></i>Recycled</span><span><i style="background:${C.land}"></i>Landfill</span>` +
+    (isT ? `<span><i style="background:${C.none}"></i>No breakdown</span>` : '') + `<span><i class="line" style="background:${INK}"></i>Recycled share</span>`;
+  if (!months.length) return chartEmpty('trendChart', 'No dated loads match these filters.');
+  const c = chart('trendChart'); if (!c) return;
+  const f = state.f;
+  const inRange = m => (f.from === ALL || m >= f.from) && (f.to === ALL || m <= f.to);
+  const ranged = f.from !== ALL || f.to !== ALL;
+  const rows = months.map(m => ({ m, a: g.get(m) || emptyAgg() })).map(r => ({ ...r, x: measure(r.a, state.unit) }));
+  const item = (val, color, m) => ({ value: +val.toFixed(3), itemStyle: { color, opacity: ranged && !inRange(m) ? 0.28 : 1 } });
+  const series = [
+    { name:'Recycled', type:'bar', stack:'w', barMaxWidth:26, data: rows.map(r => item(r.x.rec, C.rec, r.m)) },
+    { name:'Landfill', type:'bar', stack:'w', data: rows.map(r => item(r.x.land, C.land, r.m)) },
+  ];
+  if (isT) series.push({ name:'No breakdown', type:'bar', stack:'w', data: rows.map(r => item(r.x.unassessed, C.none, r.m)) });
+  series.push({ name:'Recycled share', type:'line', yAxisIndex:1, symbol:'circle', symbolSize:6, z:5,
+    lineStyle:{ color:INK, width:2 }, itemStyle:{ color:INK, borderColor:'#fff', borderWidth:1.5 },
+    data: rows.map(r => r.x.rate === null ? null : +(r.x.rate * 100).toFixed(2)) });
+  const opt = baseOpt();
+  Object.assign(opt, {
+    grid:{ left:62, right:52, top:18, bottom:30 },
+    xAxis:{ type:'category', data: months.map(m => fmtMonth(m, true)), axisTick:{ show:false }, axisLine:{ lineStyle:{ color: LINE } }, axisLabel:{ color: INK3, fontSize:11 } },
+    yAxis:[
+      { type:'value', name: unitSuffix(), nameTextStyle:{ color: INK3, align:'right' }, axisLabel:{ color: INK3, formatter: v => fmtNum(v, 0) }, splitLine:{ lineStyle:{ color: LINE } } },
+      { type:'value', min:0, max:100, axisLabel:{ color: INK3, formatter:'{value}%' }, splitLine:{ show:false } },
+    ],
+    series,
+  });
+  opt.tooltip = { ...opt.tooltip, trigger:'axis', axisPointer:{ type:'shadow', shadowStyle:{ color:'rgba(16,56,73,.05)' } },
+    formatter: ps => {
+      const r = rows[ps[0].dataIndex];
+      const lines = [
+        `<b>${fmtMonth(r.m)}</b>`,
+        `${fmtInt(r.a.loads)} loads, ${qty(r.x.total)} ${isT ? 'collected' : 'with a breakdown'}`,
+        `${sw(C.rec)}Recycled ${qty(r.x.rec)}`, `${sw(C.land)}Landfill ${qty(r.x.land)}`,
+      ];
+      if (isT) lines.push(`${sw(C.none)}No breakdown ${qty(r.x.unassessed)}`);
+      lines.push(`Recycled share <b>${fmtPct(r.x.rate)}</b>`);
+      return lines.join('<br>');
+    } };
+  c.setOption(opt, true);
+  c.off('click');
+  c.on('click', p => {
+    const m = rows[p.dataIndex]?.m; if (!m) return;
+    if (f.from === m && f.to === m) { f.from = ALL; f.to = ALL; } else { f.from = m; f.to = m; }
+    update();
+  });
+  c.getZr().off('click');
+  c.getZr().on('click', e => {       // clicks anywhere in a month column, not only on the bar
+    if (e.target) return;
+    const pt = [e.offsetX, e.offsetY];
+    if (!c.containPixel('grid', pt)) return;
+    const idx = c.convertFromPixel({ seriesIndex:0 }, pt)[0];
+    const m = rows[Math.round(idx)]?.m; if (!m) return;
+    if (f.from === m && f.to === m) { f.from = ALL; f.to = ALL; } else { f.from = m; f.to = m; }
+    update();
+  });
+}
+function renderMonthlySummary(){
+  const { g, months } = monthGroups(state.filtered);
+  const undated = state.filtered.filter(l => !l.month);
+  const isT = state.unit === 't';
+  if (!months.length && !undated.length) { $('monthlySummary').innerHTML = '<div class="empty">No loads match these filters.</div>'; return; }
+  const rows = months.map(m => ({ label: fmtMonth(m), a: g.get(m) || emptyAgg() }));
+  if (undated.length) rows.push({ label:'No date', a: aggregate(undated) });
+  const tot = aggregate(state.filtered);
+  const cells = (a, bold) => {
+    const x = measure(a, state.unit);
+    return `<td>${fmtInt(a.loads)}</td><td>${fmtNum(x.total, 1)}</td><td>${fmtNum(x.rec, 1)}</td><td>${fmtNum(x.land, 1)}</td>` +
+      (isT ? `<td>${fmtNum(x.unassessed, 1)}</td>` : '') +
+      `<td class="${rateClass(x.rate)}">${fmtPct(x.rate)}</td><td>${fmtInt(a.approved)}</td>`;
+  };
+  const u = unitSuffix();
+  $('monthlySummary').innerHTML = `<div class="dt-wrap" style="max-height:360px"><table class="dt">
+    <thead><tr><th>Month</th><th>Loads</th><th>${isT ? 'Collected' : 'Volume'} (${u})</th><th>Recycled (${u})</th><th>Landfill (${u})</th>${isT ? `<th>No breakdown (${u})</th>` : ''}<th>Recycled share</th><th>Approved loads</th></tr></thead>
+    <tbody>${rows.map(r => `<tr><td>${r.label}</td>${cells(r.a)}</tr>`).join('')}
+    <tr class="total"><td>Total</td>${cells(tot)}</tr></tbody></table></div>`;
+}
+function renderMonthlyMaterials(){
+  const { g, months } = monthGroups(state.filtered);
+  if (!months.length) { $('monthlyMaterials').innerHTML = '<div class="empty">No dated loads match these filters.</div>'; return; }
+  const rows = months.map(m => ({ m, x: measure(g.get(m) || emptyAgg(), state.unit) }));
+  let max = 0; rows.forEach(r => r.x.mat.forEach(v => { if (v > max) max = v; }));
+  const tot = measure(aggregate(state.filtered.filter(l => l.month)), state.unit);
+  const shade = (v, k) => {
+    if (!(v > 0) || !max) return '';
+    const a = (0.06 + 0.5 * v / max).toFixed(3);
+    return ` style="background:${k === OTHER ? `rgba(174,0,251,${a})` : `rgba(0,168,171,${a})`}"`;
+  };
+  $('monthlyMaterials').innerHTML = `<div class="dt-wrap" style="max-height:360px"><table class="dt">
+    <thead><tr><th>Month</th>${MATERIALS.map(m => `<th title="${m.key}">${m.key}</th>`).join('')}<th>Total (${unitSuffix()})</th></tr></thead>
+    <tbody>${rows.map(r => `<tr><td>${fmtMonth(r.m)}</td>${r.x.mat.map((v, k) => `<td${shade(v, k)}>${fmtNum(v, 1)}</td>`).join('')}<td><b>${fmtNum(r.x.mat.reduce((s, v) => s + v, 0), 1)}</b></td></tr>`).join('')}
+    <tr class="total"><td>Total</td>${tot.mat.map(v => `<td>${fmtNum(v, 1)}</td>`).join('')}<td>${fmtNum(tot.mat.reduce((s, v) => s + v, 0), 1)}</td></tr></tbody></table></div>`;
+}
+
+/* =====================================================================
+   BUILDERS / SITES / REVIEW / RECORDERS
+===================================================================== */
+function renderBuilders(){
+  const isT = state.unit === 't';
+  $('builderLegend').innerHTML = `<span><i style="background:${C.rec}"></i>Recycled</span><span><i style="background:${C.land}"></i>Landfill</span>` +
+    (isT ? `<span><i style="background:${C.none}"></i>No breakdown</span>` : '');
+  const g = groupAgg(base('company'), l => l.companyKey);
+  const names = new Map(); state.loads.forEach(l => names.set(l.companyKey, l.company));
+  let rows = [...g.entries()].map(([k, a]) => ({ k, name: names.get(k), a, x: measure(a, state.unit) }))
+    .filter(r => r.x.total > 0).sort((p, q) => q.x.total - p.x.total);
+  const sel = state.f.company;
+  let top = rows.slice(0, 12);
+  if (sel !== ALL && !top.some(r => r.k === sel)) { const s = rows.find(r => r.k === sel); if (s) top = [...top.slice(0, 11), s]; }
+  $('buildersNote').textContent = rows.length > 12 ? `Largest 12 of ${rows.length} by ${isT ? 'tonnage' : 'volume'}. Select a bar to filter.` : 'Select a bar to filter.';
+  if (!top.length) return chartEmpty('builderChart', 'No weighed loads match these filters.');
+  const c = chart('builderChart'); if (!c) return;
+  top = top.reverse();
+  const dim = r => sel !== ALL && r.k !== sel ? 0.3 : 1;
+  const item = (v, color, r) => ({ value: +v.toFixed(3), itemStyle:{ color, opacity: dim(r) } });
+  const series = [
+    { name:'Recycled', type:'bar', stack:'b', barMaxWidth:18, data: top.map(r => item(r.x.rec, C.rec, r)) },
+    { name:'Landfill', type:'bar', stack:'b', data: top.map(r => item(r.x.land, C.land, r)) },
+  ];
+  if (isT) series.push({ name:'No breakdown', type:'bar', stack:'b', data: top.map(r => item(r.x.unassessed, C.none, r)) });
+  series[series.length - 1].label = { show:true, position:'right', fontSize:11, color: INK, fontWeight:700,
+    formatter: p => { const r = top[p.dataIndex]; return r.x.rate === null ? '' : fmtPct(r.x.rate, 0); } };
+  const opt = baseOpt();
+  Object.assign(opt, {
+    grid:{ left:8, right:48, top:4, bottom:24, containLabel:true },
+    xAxis:{ type:'value', axisLabel:{ color: INK3, formatter: v => fmtNum(v, 0) }, splitLine:{ lineStyle:{ color: LINE } } },
+    yAxis:{ type:'category', data: top.map(r => r.name), axisTick:{ show:false }, axisLine:{ show:false },
+      axisLabel:{ color: INK, fontSize:12, width:170, overflow:'truncate', fontWeight: 600 } },
+    series,
+  });
+  opt.tooltip = { ...opt.tooltip, trigger:'axis', axisPointer:{ type:'shadow', shadowStyle:{ color:'rgba(16,56,73,.05)' } },
+    formatter: ps => {
+      const r = top[ps[0].dataIndex];
+      return [`<b>${esc(r.name)}</b>`, `${fmtInt(r.a.loads)} loads, ${qty(r.x.total)}`,
+        `${sw(C.rec)}Recycled ${qty(r.x.rec)}`, `${sw(C.land)}Landfill ${qty(r.x.land)}`,
+        isT ? `${sw(C.none)}No breakdown ${qty(r.x.unassessed)}` : '', `Recycled share <b>${fmtPct(r.x.rate)}</b>`].filter(Boolean).join('<br>');
+    } };
+  c.setOption(opt, true);
+  const pick = r => { if (!r) return; state.f.company = state.f.company === r.k ? ALL : r.k; update(); };
+  c.off('click'); c.on('click', p => pick(top[p.dataIndex]));
+  c.getZr().off('click');
+  c.getZr().on('click', e => {
+    if (e.target) return;
+    const pt = [e.offsetX, e.offsetY];
+    if (!c.containPixel('grid', pt)) return;
+    pick(top[Math.round(c.convertFromPixel({ seriesIndex:0 }, pt)[1])]);
+  });
+}
+
+function renderSites(){
+  const loads = base('site');
+  const g = groupAgg(loads, l => l.site);
+  const info = new Map(); state.loads.forEach(l => info.set(l.site, l));
+  const rows = [...g.entries()].map(([s, a]) => ({ s, a, x: measure(a, state.unit), l: info.get(s) }))
+    .sort((p, q) => (q.x.total - p.x.total) || (q.a.loads - p.a.loads));
+  if (!rows.length) { $('siteTable').innerHTML = '<div class="empty">No loads match these filters.</div>'; return; }
+  const max = Math.max(...rows.map(r => r.x.total), 0);
+  const tot = measure(aggregate(loads), state.unit);
+  const sel = state.f.site;
+  const period = a => a.first ? (a.first.slice(0, 7) === a.last.slice(0, 7) ? fmtMonth(a.first.slice(0, 7)) : `${fmtMonth(a.first.slice(0, 7), true)} to ${fmtMonth(a.last.slice(0, 7), true)}`) : 'No dates';
+  $('siteTable').innerHTML = `<table class="dt"><thead><tr><th>Site</th><th>Loads</th><th>${state.unit === 't' ? 'Collected' : 'Volume'} (${unitSuffix()})</th><th>Recycled</th></tr></thead><tbody>` +
+    rows.map(r => `<tr class="click${r.s === sel ? ' sel' : ''}" data-site="${esc(r.s)}" tabindex="0" title="${esc(r.s)}">
+      <td><div class="site-cell"><span>${esc(r.l.siteShort)}</span><small>${esc(r.l.company)}, ${period(r.a)}</small></div></td>
+      <td>${fmtInt(r.a.loads)}</td>
+      <td><div class="barcell">${fmtNum(r.x.total, 1)}<span class="track"><i style="width:${max ? (60 * r.x.total / max).toFixed(1) : 0}px"></i></span></div></td>
+      <td class="${rateClass(r.x.rate)}">${fmtPct(r.x.rate)}</td></tr>`).join('') +
+    `<tr class="total"><td>${fmtInt(rows.length)} site${rows.length === 1 ? '' : 's'}</td><td>${fmtInt(loads.length)}</td><td>${fmtNum(tot.total, 1)}</td><td>${fmtPct(tot.rate)}</td></tr></tbody></table>`;
+  if (sel !== ALL) {
+    const tr = $('siteTable').querySelector('tr.sel');
+    if (tr) $('siteTable').scrollTop = Math.max(0, tr.offsetTop - 60);
+  }
+}
+function renderReview(){
+  const loads = base('issue');
+  const counts = {}; Object.keys(ISSUES).forEach(k => counts[k] = 0);
+  loads.forEach(l => l.issues.forEach(k => counts[k]++));
+  const item = ([k, d]) => {
+    const on = state.f.issue === k, n = counts[k];
+    return `<li><button data-issue="${k}" aria-pressed="${on}" class="${n ? '' : 'none'}${d.fixed ? ' fixed' : ''}" ${n || on ? '' : 'disabled'}>
+      <span class="n">${fmtInt(n)}</span><span><span class="t">${d.label}</span><span class="h">${esc(d.hint)}</span></span></button></li>`;
+  };
+  const entries = Object.entries(ISSUES);
+  $('reviewList').innerHTML = '<li class="grp">Needs a look</li>' + entries.filter(e => !e[1].fixed).map(item).join('') +
+    (state.correct ? '<li class="grp">Fixed automatically, worth a spot check</li>' + entries.filter(e => e[1].fixed).map(item).join('') : '');
+}
+
+function renderDrivers(){
+  const g = groupAgg(base('driver'), l => l.driver);
+  let rows = [...g.entries()].map(([d, a]) => ({ d, a })).sort((p, q) => q.a.loads - p.a.loads);
+  const sel = state.f.driver;
+  let top = rows.slice(0, 15);
+  if (sel !== ALL && !top.some(r => r.d === sel)) { const s = rows.find(r => r.d === sel); if (s) top = [...top.slice(0, 14), s]; }
+  if (!top.length) return chartEmpty('driverChart', 'No loads match these filters.');
+  const c = chart('driverChart'); if (!c) return;
+  top = top.reverse();
+  const dim = r => sel !== ALL && r.d !== sel ? 0.3 : 1;
+  const opt = baseOpt();
+  Object.assign(opt, {
+    grid:{ left:8, right:44, top:4, bottom:24, containLabel:true },
+    xAxis:{ type:'value', minInterval:1, axisLabel:{ color: INK3 }, splitLine:{ lineStyle:{ color: LINE } } },
+    yAxis:{ type:'category', data: top.map(r => r.d), axisTick:{ show:false }, axisLine:{ show:false }, axisLabel:{ color: INK, fontSize:12, fontWeight:600, width:140, overflow:'truncate' } },
+    series:[
+      { name:'Approved', type:'bar', stack:'d', barMaxWidth:16, data: top.map(r => ({ value:r.a.approved, itemStyle:{ color:C.rec, opacity:dim(r) } })) },
+      { name:'Awaiting approval', type:'bar', stack:'d', data: top.map(r => ({ value:r.a.loads - r.a.approved, itemStyle:{ color:C.none, opacity:dim(r) } })),
+        label:{ show:true, position:'right', fontSize:11, fontWeight:700, color: INK, formatter: p => fmtInt(top[p.dataIndex].a.loads) } },
+    ],
+  });
+  opt.tooltip = { ...opt.tooltip, trigger:'axis', axisPointer:{ type:'shadow', shadowStyle:{ color:'rgba(16,56,73,.05)' } },
+    formatter: ps => { const r = top[ps[0].dataIndex]; return `<b>${esc(r.d)}</b><br>${fmtInt(r.a.loads)} loads<br>${sw(C.rec)}${fmtInt(r.a.approved)} approved<br>${sw(C.none)}${fmtInt(r.a.loads - r.a.approved)} awaiting approval`; } };
+  c.setOption(opt, true);
+  const pick = r => { if (!r) return; state.f.driver = state.f.driver === r.d ? ALL : r.d; update(); };
+  c.off('click'); c.on('click', p => pick(top[p.dataIndex]));
+  c.getZr().off('click');
+  c.getZr().on('click', e => {
+    if (e.target) return;
+    const pt = [e.offsetX, e.offsetY];
+    if (!c.containPixel('grid', pt)) return;
+    pick(top[Math.round(c.convertFromPixel({ seriesIndex:0 }, pt)[1])]);
+  });
+}
+
+/* =====================================================================
+   LOADS TABLE — every row, virtualised
+===================================================================== */
+const ROW_H = 48, HEAD_H = 40;
+const ICON_DOC = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5M9 13h6M9 17h4"/></svg>';
+const ICON_CAM = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 8h3l2-3h6l2 3h3a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1z"/><circle cx="12" cy="13" r="3.5"/></svg>';
+const NUM_NULL = v => (v === null || v === undefined || Number.isNaN(v)) ? null : v;
+const COLS = [
+  { key:'date', label:'Date', sort: l => l.date,
+    cell: l => l.date ? (l.dateFromRecord ? `<span class="sub" title="No load date on this record; the time it was recorded is shown">${fmtDate(l.date)}</span>` : fmtDate(l.date)) : '—' },
+  { key:'site', label:'Site and builder', sort: l => l.siteShort.toLowerCase(),
+    cell: l => `<span class="two" title="${esc(l.site)}"><span>${esc(l.siteShort)}</span><small>${esc(l.company)}</small></span>` },
+  { key:'wo', label:'Work order', sort: l => l.wo ? (Number(l.wo) || l.wo) : null, cell: l => esc(l.wo || '—') },
+  { key:'w', label:'Weight', r:true, sort: l => l.wState === 'unreadable' ? null : NUM_NULL(l.w),
+    cell: l => {
+      if (l.wState === 'ok') return l.wFix
+        ? `<span class="fx" title="${esc(l.wFix === 'kg' ? `Recorded as ${fmtRec(l.wRecorded)}, read as kilograms` : 'Read from the docket-scan text')}">${fmtNum(l.w, 2)} t</span>`
+        : `${fmtNum(l.w, 2)} t`;
+      if (l.wState === 'range') return `<span class="flag" title="${esc(fmtNum(l.w, 2))} t is outside 0–${CONFIG.MAX_LOAD_T} t, so it's left out of totals">${Math.abs(l.w) >= 1e5 ? 'check' : esc(fmtNum(l.w, 0)) + ' t?'}</span>`;
+      if (l.wState === 'unreadable') return `<span class="flag" title="${esc(l.wText.slice(0, 160))}">not read</span>`;
+      return l.w === 0 ? '<span class="sub">0 t</span>' : '—';
+    } },
+  { key:'vol', label:'Volume', r:true, sort: l => l.inTotals ? NUM_NULL(l.vol) : null,
+    cell: l => l.vol === null ? '—' : (l.inTotals ? `${fmtNum(l.vol, 2)} m³` : `<span class="sub" title="Based on a weight that needs checking">—</span>`) },
+  { key:'rec', label:'Recycled', r:true, sort: l => NUM_NULL(l.recRate),
+    cell: l => l.recRate !== null ? `<span class="${rateClass(l.recRate)}${l.mixFix ? ' fx' : ''}"${l.mixFix ? ` title="Mix recorded as ${fmtNum(l.pctTotal, 0)}%, scaled to 100%"` : ''}>${fmtPct(l.recRate)}</span>`
+      : (!l.mixOk && l.pctTotal > 0 ? `<span class="flag soft" title="Material mix totals ${l.pctTotal}%">mix ${fmtNum(l.pctTotal, 0)}%</span>` : '—') },
+  { key:'driver', label:'Recorded by', sort: l => l.driver.toLowerCase(), cell: l => esc(l.driver) },
+  { key:'status', label:'Approval', sort: l => l.approvedOn || '',
+    cell: l => l.approved ? `<span class="status ok" title="Approved ${fmtDate(l.approvedOn)}">Approved</span>` : '<span class="status pending">Pending</span>' },
+  { key:'pics', label:'Photos', sort: l => (l.docket ? 1 : 0) + (l.photo ? 1 : 0),
+    cell: l => `<span class="pics"><span class="${l.docket ? '' : 'no'}" title="${l.docket ? 'Docket photo' : 'No docket photo'}">${ICON_DOC}</span><span class="${l.photo ? '' : 'no'}" title="${l.photo ? 'Load photo' : 'No load photo'}">${ICON_CAM}</span></span>` },
+];
+function renderHead(){
+  $('ltHead').innerHTML = COLS.map(c => {
+    const s = state.sort.key === c.key ? (state.sort.dir > 0 ? 'ascending' : 'descending') : 'none';
+    return `<th scope="col" class="${c.r ? 'r' : ''}" aria-sort="${s}"><button data-sort="${c.key}">${c.label}</button></th>`;
+  }).join('');
+}
+function applyTable(resetScroll){
+  const q = state.search.trim().toLowerCase().split(/\s+/).filter(Boolean);
+  let v = q.length ? state.filtered.filter(l => q.every(t => l.search.includes(t))) : state.filtered.slice();
+  const col = COLS.find(c => c.key === state.sort.key) || COLS[0];
+  const dir = state.sort.dir;
+  const keyed = v.map(l => [col.sort(l), l]);
+  keyed.sort((p, q2) => {
+    const a = p[0], b = q2[0];
+    const an = a === null || a === undefined || a === '', bn = b === null || b === undefined || b === '';
+    if (an || bn) return an && bn ? 0 : (an ? 1 : -1);          // blanks always last
+    if (a < b) return -dir; if (a > b) return dir; return 0;
+  });
+  state.view = keyed.map(x => x[1]);
+  $('tableCount').textContent = `${fmtInt(state.view.length)} of ${fmtInt(state.loads.length)} loads`;
+  $('lt').setAttribute('aria-rowcount', String(state.view.length + 1));
+  renderHead();
+  if (resetScroll) $('ltWrap').scrollTop = 0;
+  renderRows(true);
+}
+function renderRows(force){
+  const wrap = $('ltWrap'), n = state.view.length;
+  const top = Math.max(0, wrap.scrollTop - HEAD_H);
+  const start = Math.max(0, Math.floor(top / ROW_H) - 8);
+  const end = Math.min(n, start + Math.ceil((wrap.clientHeight || 600) / ROW_H) + 18);
+  if (!force && start === state.vStart && end === state.vEnd) return;
+  state.vStart = start; state.vEnd = end;
+  const focused = document.activeElement && document.activeElement.closest && document.activeElement.closest('#ltBody tr.row');
+  const focusIdx = focused ? +focused.dataset.i : -1;
+  const pad = h => h > 0 ? `<tr aria-hidden="true"><td class="spacer" colspan="${COLS.length}" style="height:${h}px"></td></tr>` : '';
+  let html = pad(start * ROW_H);
+  if (!n) html = `<tr><td colspan="${COLS.length}"><div class="empty">No loads match these filters and search.</div></td></tr>`;
+  for (let i = start; i < end; i++) {
+    const l = state.view[i];
+    html += `<tr class="row" data-i="${i}" tabindex="0" aria-rowindex="${i + 2}">` +
+      COLS.map(c => `<td class="${c.r ? 'r' : ''}">${c.cell(l)}</td>`).join('') + '</tr>';
+  }
+  html += pad((n - end) * ROW_H);
+  $('ltBody').innerHTML = html;
+  if (focusIdx >= 0) { const tr = $('ltBody').querySelector(`tr[data-i="${focusIdx}"]`); if (tr) tr.focus({ preventScroll:true }); }
+}
+function focusRow(i){
+  i = Math.max(0, Math.min(state.view.length - 1, i));
+  const wrap = $('ltWrap');
+  const y = HEAD_H + i * ROW_H;
+  if (y < wrap.scrollTop + HEAD_H) wrap.scrollTop = y - HEAD_H;
+  else if (y + ROW_H > wrap.scrollTop + wrap.clientHeight) wrap.scrollTop = y + ROW_H - wrap.clientHeight;
+  renderRows(true);
+  const tr = $('ltBody').querySelector(`tr[data-i="${i}"]`);
+  if (tr) tr.focus({ preventScroll:true });
+}
+
+/* =====================================================================
+   LOAD DETAIL MODAL
+===================================================================== */
+function openModal(i){
+  if (i < 0 || i >= state.view.length) return;
+  if (state.modalIdx < 0) state.lastFocus = document.activeElement;
+  state.modalIdx = i;
+  const l = state.view[i];
+  $('mTitle').textContent = l.site;
+  $('mSub').textContent = l.account ? `${l.company}, account ${l.account}` : l.company;
+  $('mPos').textContent = `${fmtInt(i + 1)} of ${fmtInt(state.view.length)}`;
+  $('mPrev').disabled = i === 0;
+  $('mNext').disabled = i === state.view.length - 1;
+
+  const tags = [];
+  tags.push(l.approved
+    ? `<span class="tag ok">Approved ${fmtDate(l.approvedOn)}${l.approver ? ' by ' + esc(l.approver) : ''}</span>`
+    : '<span class="tag">Awaiting approval</span>');
+  l.issues.forEach(k => tags.push(`<span class="tag ${ISSUES[k].fixed ? 'fix' : 'warn'}" title="${esc(ISSUES[k].hint)}">${esc(ISSUES[k].label)}</span>`));
+  $('mTags').innerHTML = tags.join('');
+
+  const t = l.t;
+  let weight, wSmall = '';
+  if (l.wState === 'ok') {
+    weight = `${fmtNum(l.w, 2)} t`;
+    if (l.wFix === 'kg') wSmall = `Recorded as ${fmtRec(l.wRecorded)}, read as kilograms`;
+    if (l.wFix === 'text') wSmall = 'Net weight read from the docket-scan text';
+  }
+  else if (l.wState === 'range') { weight = `${fmtNum(l.w, 2)} t`; wSmall = `Outside 0–${CONFIG.MAX_LOAD_T} t, so not counted in totals`; }
+  else if (l.wState === 'unreadable') { weight = 'Not read'; wSmall = 'Docket scan returned text'; }
+  else { weight = l.w === 0 ? '0 t' : '—'; wSmall = 'No weight on this record'; }
+  const facts = [
+    ['Load date', l.date ? fmtDateTime(l.date) : '—', l.dateFromRecord ? 'Time recorded, no load date' : ''],
+    ['Work order', l.wo || '—', ''],
+    ['Weight', weight, wSmall, true],
+    ['Recycled', l.recRate !== null ? fmtPct(l.recRate) : '—',
+      l.recRate !== null ? (l.inTotals ? `${fmtNum(l.w - t[OTHER], 2)} t of the load${l.mixFix ? ', mix scaled' : ''}` : 'Share of the mix; weight needs checking') : (l.mixUsable ? 'Needs a weight' : `Mix totals ${fmtNum(l.pctTotal, 0)}%, needs 100%`), true],
+    ['Volume', l.vol !== null && l.inTotals ? `${fmtNum(l.vol, 2)} m³` : '—', l.vol === null ? '' : (l.inTotals ? 'From mix and density' : 'Needs a valid weight')],
+    ['Landfill (other)', t && l.inTotals ? `${fmtNum(t[OTHER], 2)} t` : '—', t ? `${fmtNum(l.pctUsed[OTHER] || 0, l.mixFix ? 1 : 0)}% of the ${l.mixFix ? 'scaled ' : ''}mix` : ''],
+    ['Recorded by', l.driver, l.createdOn ? fmtDateTime(l.createdOn) : ''],
+    ['Load ID', l.id, '', false, 'id'],
+  ];
+  $('mFacts').innerHTML = facts.map(([k, v, s, big, cls]) =>
+    `<div class="fact"><dt>${k}</dt><dd class="${big ? 'big' : ''} ${cls || ''}">${esc(v)}${s ? `<small>${esc(s)}</small>` : ''}</dd></div>`).join('');
+
+  $('mDocketNote').innerHTML = l.wText
+    ? `<div class="docket-note"><b>${l.wFix === 'text' ? `Docket scan text in the weight field, net weight ${fmtNum(l.w, 2)} t read from it` : 'What the docket scan returned instead of a weight'}</b>\n${esc(l.wText)}</div>` : '';
+
+  $('mPhotos').innerHTML = photoTile(l.docket, 'Docket photo') + photoTile(l.photo, 'Waste load photo');
+  $('mPhotos').querySelectorAll('img').forEach(img => img.addEventListener('error', () => photoFailed(img), { once:true }));
+
+  renderComposition(l);
+
+  const ov = $('overlay');
+  if (!ov.classList.contains('open')) {
+    ov.classList.add('open'); ov.setAttribute('aria-hidden', 'false');
+    document.body.style.overflow = 'hidden';
+    $('mClose').focus();
+  }
+  ov.scrollTop = 0;
+}
+function closeModal(){
+  const ov = $('overlay');
+  if (!ov.classList.contains('open')) return;
+  ov.classList.remove('open'); ov.setAttribute('aria-hidden', 'true');
+  document.body.style.overflow = '';
+  const i = state.modalIdx;
+  state.modalIdx = -1;
+  if (i >= 0 && state.lastFocus && state.lastFocus.closest && state.lastFocus.closest('#ltBody')) focusRow(i);
+  else if (state.lastFocus) state.lastFocus.focus({ preventScroll:true });
+}
+function extOf(url){ return (url.split(/[?#]/)[0].split('.').pop() || '').toLowerCase(); }
+function photoTile(url, label){
+  if (!url) return `<div class="photo"><div class="photo-cap">${label}</div><div class="photo-frame static"><div class="ph">No ${label.toLowerCase()} on this load.</div></div></div>`;
+  const open = `<a href="${esc(url)}" target="_blank" rel="noopener">Open original</a>`;
+  const ext = extOf(url);
+  if (ext === 'dng') {
+    return `<div class="photo"><div class="photo-cap">${label}${open}</div><div class="photo-frame static"><div class="ph">This is a raw camera file (DNG), which browsers can't display.<br><a href="${esc(url)}" target="_blank" rel="noopener">Download it</a> to view it in a photo app.</div></div></div>`;
+  }
+  return `<div class="photo"><div class="photo-cap">${label}${open}</div><button class="photo-frame" type="button" data-src="${esc(url)}" data-cap="${esc(label)}" aria-label="Enlarge ${label.toLowerCase()}"><img src="${esc(url)}" alt="${label} for this load" loading="lazy" decoding="async" referrerpolicy="no-referrer" data-ext="${ext}"></button></div>`;
+}
+function photoFailed(img){
+  const frame = img.closest('.photo-frame'); if (!frame) return;
+  const url = frame.dataset.src, heic = img.dataset.ext === 'heic' || img.dataset.ext === 'heif';
+  const link = `<a href="${esc(url)}" target="_blank" rel="noopener">Open the original</a>`;
+  const div = document.createElement('div');
+  div.className = 'photo-frame static';
+  div.innerHTML = `<div class="ph">${heic ? `This photo is in HEIC format, which this browser can't preview (Safari can).<br>${link} to view or download it.` : `This photo couldn't be loaded here.<br>${link} to check the link.`}</div>`;
+  frame.replaceWith(div);
+}
+function renderComposition(l){
+  const box = $('mComp');
+  const has = l.pct.some(p => p > 0);
+  if (!has) { box.innerHTML = '<h3>Material mix</h3><div class="muted">No material mix was recorded for this load.</div>'; disposeModalChart(); return; }
+  const ai = l.ai;
+  const note = l.mixOk ? 'Mix totals 100%'
+    : (l.mixFix ? `Recorded mix totals ${fmtNum(l.pctTotal, 0)}%, scaled to 100% for the split` : `Mix totals ${fmtNum(l.pctTotal, 0)}%, so no tonnage split`);
+  const rows = MATERIALS.map((m, k) => ({ k, m, p: l.pct[k] || 0, s: l.pctUsed[k] || 0, t: l.t ? l.t[k] : null, ai: ai ? ai[k] : null }))
+    .filter(r => r.p > 0 || (r.ai && r.ai > 0))
+    .sort((a, b) => b.p - a.p || (b.ai || 0) - (a.ai || 0));
+  box.innerHTML = `<h3><span>Material mix</span><span class="muted">${note}${ai ? '. AI estimate is the app\u2019s suggestion from the load photo.' : ''}</span></h3>
+    <div id="mDonut" style="height:210px"></div>
+    <table><thead><tr><th>Material</th><th>Mix</th>${l.mixFix ? '<th>Scaled</th>' : ''}<th>Tonnes</th>${ai ? '<th>AI estimate</th>' : ''}</tr></thead><tbody>
+    ${rows.map(r => `<tr class="${r.p ? '' : 'zero'}"><td><i class="sw" style="background:${r.m.color}"></i>${r.m.key}${r.k === OTHER ? ' <span class="flag">landfill</span>' : ''}</td>
+      <td>${r.p ? fmtNum(r.p, 0) + '%' : '—'}</td>${l.mixFix ? `<td>${r.s ? fmtNum(r.s, 1) + '%' : '—'}</td>` : ''}<td>${r.t !== null && r.p && l.inTotals ? fmtNum(r.t, 2) : '—'}</td>${ai ? `<td>${r.ai !== null ? fmtNum(r.ai, 0) + '%' : '—'}</td>` : ''}</tr>`).join('')}
+    <tr class="tot"><td>Total</td><td>${fmtNum(l.pctTotal, 0)}%</td>${l.mixFix ? '<td>100%</td>' : ''}<td>${l.t && l.inTotals ? fmtNum(l.w, 2) : '—'}</td>${ai ? `<td>${fmtNum(ai.reduce((s, v) => s + (v || 0), 0), 0)}%</td>` : ''}</tr>
+    </tbody></table>`;
+  disposeModalChart();
+  if (!window.echarts) return;
+  const c = echarts.init($('mDonut'));
+  state.charts.__modal = c;
+  // the popup may still be hidden when this runs, so resize once it has a real size
+  if (!state.modalRO && window.ResizeObserver) state.modalRO = new ResizeObserver(() => { const m = state.charts.__modal; if (m && !m.isDisposed()) m.resize(); });
+  if (state.modalRO) { state.modalRO.disconnect(); state.modalRO.observe($('mDonut')); }
+  requestAnimationFrame(() => { if (!c.isDisposed()) c.resize(); });
+  const data = rows.filter(r => r.p > 0).map(r => ({ name: r.m.key, value: r.p, itemStyle:{ color: r.m.color, borderColor:'#fff', borderWidth:1.5 } }));
+  const centre = l.recRate !== null ? fmtPct(l.recRate, 0) : `${fmtNum(l.pctTotal, 0)}%`;
+  const opt = baseOpt();
+  Object.assign(opt, {
+    series:[{ type:'pie', radius:['56%', '86%'], data, label:{ show:false }, emphasis:{ scaleSize:4 } }],
+    graphic:[
+      { type:'text', left:'center', top:'42%', style:{ text: centre, fill: INK, font:'500 20px Unbounded, Segoe UI, sans-serif', textAlign:'center' } },
+      { type:'text', left:'center', top:'56%', style:{ text: l.recRate !== null ? 'recycled' : 'recorded', fill: INK3, font:'600 11px Manrope, sans-serif', textAlign:'center' } },
+    ],
+  });
+  opt.tooltip = { ...opt.tooltip, trigger:'item', formatter: p => `${sw(p.color)}${p.name}: <b>${p.value}%</b>` };
+  c.setOption(opt);
+}
+function disposeModalChart(){ if (state.charts.__modal) { state.charts.__modal.dispose(); delete state.charts.__modal; } }
+function openLightbox(src, cap){
+  $('lbImg').src = src; $('lbImg').alt = cap;
+  $('lbCap').textContent = cap; $('lbLink').href = src;
+  $('lightbox').classList.add('open');
+  $('lbClose').focus();
+}
+function closeLightbox(){
+  $('lightbox').classList.remove('open'); $('lbImg').removeAttribute('src');
+  const btn = $('mPhotos').querySelector('.photo-frame[data-src]'); if (btn) btn.focus();
+}
+
+/* =====================================================================
+   EXPORT / WORKBOOK UPLOAD / FOOTER
+===================================================================== */
+function exportCsv(){
+  const head = ['load_id','date','date_is_record_time','month','site','builder','account_number','work_order',
+    'weight_recorded','weight_used_t','weight_status','in_tonnage_totals','corrections','volume_m3','recycled_pct','recycled_t','landfill_t',
+    ...MATERIALS.map(m => m.key.toLowerCase() + '_pct'), 'mix_total_pct', ...MATERIALS.map(m => m.key.toLowerCase() + '_t'),
+    'recorded_by','recorded_on','approval','approved_by','approved_on','docket_photo','load_photo','checks'];
+  const r4 = v => v === null || v === undefined ? '' : Math.round(v * 10000) / 10000;
+  const rows = state.view.map(l => {
+    const ok = l.t && l.inTotals;   // tonnages from out-of-range weights are left blank
+    return [
+    l.id, l.date ? l.date.replace('T', ' ') : '', l.dateFromRecord ? 'yes' : 'no', l.month || '', l.site, l.company, l.account || '', l.wo || '',
+    typeof l.weightRaw === 'string' ? l.weightRaw.replace(/\s+/g, ' ') : (l.weightRaw ?? ''), l.inTotals ? r4(l.w) : '', l.wState, l.inTotals ? 'yes' : 'no',
+    l.issues.filter(k => ISSUES[k].fixed).map(k => ISSUES[k].label).join('; '),
+    ok ? r4(l.vol) : '', l.recRate !== null ? r4(l.recRate * 100) : '', ok ? r4(l.w - l.t[OTHER]) : '', ok ? r4(l.t[OTHER]) : '',
+    ...l.pct.map(p => p ?? ''), l.pctTotal, ...MATERIALS.map((m, k) => ok ? r4(l.t[k]) : ''),
+    l.driver, l.createdOn ? l.createdOn.replace('T', ' ') : '', l.approved ? 'approved' : 'pending', l.approver || '',
+    l.approvedOn ? l.approvedOn.replace('T', ' ') : '', l.docket || '', l.photo || '', l.issues.filter(k => !ISSUES[k].fixed).map(k => ISSUES[k].label).join('; '),
+  ]; });
+  const csv = [head, ...rows].map(r => r.map(v => { const s = String(v); return /[",\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s; }).join(',')).join('\r\n');
+  const blob = new Blob(['\ufeff' + csv], { type:'text/csv;charset=utf-8' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `waste_loads_${state.correct ? 'fixed' : 'sheet'}_${new Date().toISOString().slice(0, 10)}.csv`;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+}
+function loadScript(src){
+  return new Promise((res, rej) => {
+    if (window.XLSX) return res();
+    const s = document.createElement('script');
+    s.src = src; s.onload = res; s.onerror = () => rej(new Error('Couldn\u2019t download the spreadsheet reader. Check your internet connection and try again.'));
+    document.head.appendChild(s);
+  });
+}
+async function loadWorkbook(file){
+  setSource('loading', `Reading ${file.name}…`);
+  try {
+    await loadScript(CONFIG.XLSX_CDN);
+    const wb = XLSX.read(await file.arrayBuffer(), { type:'array', cellDates:false });
+    let density = null;
+    loadRaws(() => {
+      const out = rawFromWorkbook(XLSX, wb);
+      if (!out.raws.length) throw new Error('The Waste Loads sheet has no load rows.');
+      density = out.density;
+      return out.raws;
+    }, null, { name: file.name, kind:'file' });
+    state.raw.density = state.density = density;
+  } catch (err) {
+    console.error(err);
+    const prev = state.source;
+    if (prev) setSource('err', `Couldn't open ${file.name}: ${err.message || err}`, `Still showing ${prev.name}`);
+    else showStage('error', `Couldn\u2019t open ${file.name}`, err.message || String(err));
+  }
+}
+function renderFooter(){
+  const dens = MATERIALS.map(m => `${m.key} ${m.density}`).join(', ');
+  const src = state.source || {};
+  const where = src.kind === 'live' ? `${esc(src.name)} (Google Sheets, read live at ${clock(state.live.syncedAt)})` : `${esc(src.name || '')} (file opened on this computer)`;
+  const warn = (src.warnings || []).length ? ` <strong>Sheet notes:</strong> ${src.warnings.map(esc).join(' ')}` : '';
+  $('footer').innerHTML = `Tonnage totals use loads weighing more than 0 t and up to ${CONFIG.MAX_LOAD_T} t; lighter or heavier entries stay in the table, flagged for checking. ` +
+    `Recycled and landfill tonnes come from loads whose material mix adds to 100%, split with the Density sheet (t/m³): ${dens}. ` +
+    `Everything except “${esc(CONFIG.LANDFILL_MATERIAL)}” is counted as recycled, as in the sheet's Recycled (%) column. Loads without a date use the time they were recorded. ` +
+    `Source: ${where}.${warn}`;
+}
+
+/* =====================================================================
+   WIRING
+===================================================================== */
+function wire(){
+  const f = state.f;
+  $('fCompany').addEventListener('change', e => { f.company = e.target.value; update(); });
+  $('fSite').addEventListener('change', e => { f.site = e.target.value; update(); });
+  $('fDriver').addEventListener('change', e => { f.driver = e.target.value; update(); });
+  $('fFrom').addEventListener('change', e => { f.from = e.target.value; if (f.from !== ALL && f.to !== ALL && f.to < f.from) f.to = f.from; update(); });
+  $('fTo').addEventListener('change', e => { f.to = e.target.value; if (f.from !== ALL && f.to !== ALL && f.from > f.to) f.from = f.to; update(); });
+  $('fStatus').addEventListener('change', e => { f.status = e.target.value; update(); });
+  $('fMaterial').addEventListener('change', e => { f.material = +e.target.value; update(); });
+  const setUnit = u => { state.unit = u; $('uT').setAttribute('aria-pressed', String(u === 't')); $('uV').setAttribute('aria-pressed', String(u === 'm3')); renderAll({ keepScroll:true }); };
+  $('uT').addEventListener('click', () => setUnit('t'));
+  $('uV').addEventListener('click', () => setUnit('m3'));
+  $('cOn').addEventListener('click', () => { if (!state.correct) setCorrections(true); });
+  $('cOff').addEventListener('click', () => { if (state.correct) setCorrections(false); });
+  $('clearBtn').addEventListener('click', clearAll);
+  $('chips').addEventListener('click', e => { const b = e.target.closest('button[data-k]'); if (b) clearOne(b.dataset.k); });
+  $('exportBtn').addEventListener('click', exportCsv);
+  $('loadBtn').addEventListener('click', () => $('fileInput').click());
+  $('refreshBtn').addEventListener('click', () => refreshLive({ manual:true }));
+  $('stage').addEventListener('click', e => {
+    const b = e.target.closest('button[data-act]'); if (!b) return;
+    if (b.dataset.act === 'retry') refreshLive({ manual:true });
+    if (b.dataset.act === 'file') $('fileInput').click();
+  });
+  document.addEventListener('visibilitychange', () => {
+    const due = state.live.syncedAt && (Date.now() - state.live.syncedAt) > SETTINGS.AUTO_REFRESH_MINUTES * 60000;
+    if (!document.hidden && due && SETTINGS.AUTO_REFRESH_MINUTES > 0) refreshLive({ auto:true });
+  });
+  $('fileInput').addEventListener('change', e => { const file = e.target.files[0]; if (file) loadWorkbook(file); e.target.value = ''; });
+
+  // hero interactions
+  $('matList').addEventListener('click', e => { const b = e.target.closest('button[data-k]'); if (b) toggleMaterial(+b.dataset.k); });
+  $('matList').addEventListener('mouseover', e => { const b = e.target.closest('button[data-k]'); if (b) setHighlight(+b.dataset.k); });
+  $('matList').addEventListener('mouseleave', () => setHighlight(-1));
+  $('matList').addEventListener('focusin', e => { const b = e.target.closest('button[data-k]'); if (b) setHighlight(+b.dataset.k); });
+  $('matList').addEventListener('focusout', () => setHighlight(-1));
+  $('skipWrap').addEventListener('mouseover', e => { const r = e.target.closest('.layer'); setHighlight(r ? +r.dataset.k : -1); });
+  $('skipWrap').addEventListener('mouseleave', () => setHighlight(-1));
+  $('skipWrap').addEventListener('click', e => { const r = e.target.closest('.layer'); if (r) toggleMaterial(+r.dataset.k); });
+
+  document.querySelectorAll('#monthly [data-view]').forEach(b => b.addEventListener('click', () => {
+    state.monthlyView = b.dataset.view; renderMonthly();
+    if (state.monthlyView === 'trend' && state.charts.trendChart) state.charts.trendChart.resize();
+  }));
+  const pickSite = tr => { const s = tr.dataset.site; f.site = f.site === s ? ALL : s; update(); };
+  $('siteTable').addEventListener('click', e => { const tr = e.target.closest('tr[data-site]'); if (tr) pickSite(tr); });
+  $('siteTable').addEventListener('keydown', e => { const tr = e.target.closest('tr[data-site]'); if (tr && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); pickSite(tr); } });
+  $('reviewList').addEventListener('click', e => {
+    const b = e.target.closest('button[data-issue]'); if (!b) return;
+    f.issue = f.issue === b.dataset.issue ? null : b.dataset.issue;
+    update();
+    if (f.issue) $('loads').scrollIntoView({ behavior: REDUCED ? 'auto' : 'smooth', block:'start' });
+  });
+
+  // table
+  let searchT;
+  $('search').addEventListener('input', e => { clearTimeout(searchT); searchT = setTimeout(() => { state.search = e.target.value; renderChips(); applyTable(true); }, 120); });
+  $('ltHead').addEventListener('click', e => {
+    const b = e.target.closest('button[data-sort]'); if (!b) return;
+    const k = b.dataset.sort;
+    state.sort = state.sort.key === k ? { key:k, dir: -state.sort.dir } : { key:k, dir: (k === 'date' || k === 'w' || k === 'vol' || k === 'rec') ? -1 : 1 };
+    applyTable(true);
+  });
+  let raf = 0;
+  $('ltWrap').addEventListener('scroll', () => { if (!raf) raf = requestAnimationFrame(() => { raf = 0; renderRows(false); }); }, { passive:true });
+  $('ltBody').addEventListener('click', e => { const tr = e.target.closest('tr.row'); if (tr) openModal(+tr.dataset.i); });
+  $('ltBody').addEventListener('keydown', e => {
+    const tr = e.target.closest('tr.row'); if (!tr) return;
+    const i = +tr.dataset.i;
+    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openModal(i); }
+    else if (e.key === 'ArrowDown') { e.preventDefault(); focusRow(i + 1); }
+    else if (e.key === 'ArrowUp') { e.preventDefault(); focusRow(i - 1); }
+    else if (e.key === 'PageDown') { e.preventDefault(); focusRow(i + 14); }
+    else if (e.key === 'PageUp') { e.preventDefault(); focusRow(i - 14); }
+    else if (e.key === 'Home' && e.ctrlKey) { e.preventDefault(); focusRow(0); }
+    else if (e.key === 'End' && e.ctrlKey) { e.preventDefault(); focusRow(state.view.length - 1); }
+  });
+
+  // modal
+  $('mClose').addEventListener('click', closeModal);
+  $('mPrev').addEventListener('click', () => openModal(state.modalIdx - 1));
+  $('mNext').addEventListener('click', () => openModal(state.modalIdx + 1));
+  $('overlay').addEventListener('click', e => { if (e.target.id === 'overlay') closeModal(); });
+  $('mPhotos').addEventListener('click', e => { const b = e.target.closest('button.photo-frame'); if (b) openLightbox(b.dataset.src, b.dataset.cap); });
+  $('lbClose').addEventListener('click', closeLightbox);
+  $('lightbox').addEventListener('click', e => { if (e.target.id === 'lightbox') closeLightbox(); });
+  $('lbImg').addEventListener('error', () => { $('lbCap').textContent = 'This photo can\u2019t be previewed here.'; });
+  document.addEventListener('keydown', e => {
+    if ($('lightbox').classList.contains('open')) { if (e.key === 'Escape') closeLightbox(); return; }
+    if (!$('overlay').classList.contains('open')) return;
+    if (e.key === 'Escape') closeModal();
+    else if (e.key === 'ArrowLeft' && !$('mPrev').disabled) openModal(state.modalIdx - 1);
+    else if (e.key === 'ArrowRight' && !$('mNext').disabled) openModal(state.modalIdx + 1);
+    else if (e.key === 'Tab') {            // keep focus inside the dialog
+      const items = [...document.querySelectorAll('#overlay button:not(:disabled), #overlay a[href]')];
+      if (!items.length) return;
+      const first = items[0], last = items[items.length - 1];
+      if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+      else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+    }
+  });
+
+  // layout: sticky header height, nav highlight, chart resize
+  const head = $('head');
+  const setHeadH = () => document.documentElement.style.setProperty('--head-h', head.offsetHeight + 'px');
+  new ResizeObserver(setHeadH).observe(head); setHeadH();
+  window.addEventListener('scroll', () => head.classList.toggle('scrolled', window.scrollY > 4), { passive:true });
+  const links = [...document.querySelectorAll('#nav a')];
+  const io = new IntersectionObserver(entries => {
+    entries.forEach(en => { if (en.isIntersecting) links.forEach(a => a.classList.toggle('on', a.getAttribute('href') === '#' + en.target.id)); });
+  }, { rootMargin:'-45% 0px -50% 0px' });
+  ['overview', 'monthly', 'builders', 'review', 'loads'].forEach(id => io.observe($(id)));
+  let rz;
+  window.addEventListener('resize', () => { clearTimeout(rz); rz = setTimeout(() => { Object.values(state.charts).forEach(c => c.resize()); renderRows(true); }, 120); });
+}
+
+/* =====================================================================
+   LIVE DATA — Google Sheets via the Apps Script web app (see Code.gs)
+===================================================================== */
+function feedUrl(extra){
+  const u = new URL(SETTINGS.DATA_URL);
+  if (SETTINGS.DATA_KEY) u.searchParams.set('key', SETTINGS.DATA_KEY);
+  u.searchParams.set('_', Date.now().toString(36));          // no stale caches
+  Object.entries(extra || {}).forEach(([k, v]) => u.searchParams.set(k, v));
+  return u.toString();
+}
+function hashText(t){            // cheap change detector (FNV-1a)
+  let h = 0x811c9dc5;
+  for (let i = 0; i < t.length; i++) { h ^= t.charCodeAt(i); h = Math.imul(h, 0x01000193); }
+  return (h >>> 0).toString(36) + ':' + t.length;
+}
+function jsonp(url, ms){
+  return new Promise((resolve, reject) => {
+    const cb = '__wasteFeed' + Date.now().toString(36);
+    const tag = document.createElement('script');
+    const done = () => { clearTimeout(timer); delete window[cb]; tag.remove(); };
+    const timer = setTimeout(() => { done(); reject(new Error('No response from the web app.')); }, ms);
+    window[cb] = data => { done(); resolve(data); };
+    tag.onerror = () => { done(); reject(new Error('The web app couldn\u2019t be reached.')); };
+    tag.src = url + '&callback=' + cb;
+    document.head.appendChild(tag);
+  });
+}
+async function fetchFeed(){
+  let text;
+  try {
+    const res = await fetch(feedUrl(), { method:'GET', redirect:'follow', credentials:'omit' });
+    if (!res.ok) throw new Error(`The web app answered with HTTP ${res.status}.`);
+    text = await res.text();
+    try { return { body: JSON.parse(text), text }; }
+    catch (e) { throw new Error('The web app didn\u2019t return data. Check the deployment has \u201cWho has access: Anyone\u201d.'); }
+  } catch (err) {
+    if (!(err instanceof TypeError)) throw err;               // TypeError = blocked or offline: try JSONP once
+    const body = await jsonp(feedUrl(), 45000).catch(() => { throw new Error('Couldn\u2019t reach Google. Check your internet connection and that the web app is deployed with \u201cWho has access: Anyone\u201d.'); });
+    return { body, text: JSON.stringify(body) };
+  }
+}
+async function refreshLive(opts){
+  opts = opts || {};
+  if (!SETTINGS.DATA_URL || /PASTE/i.test(SETTINGS.DATA_URL)) { showStage('setup'); return; }
+  if (state.live.busy) return;
+  if (opts.auto && (document.hidden || $('overlay').classList.contains('open') || $('lightbox').classList.contains('open')
+      || (state.source && state.source.kind !== 'live'))) return;
+  const first = !state.loads.length;
+  state.live.busy = true;
+  $('refreshBtn').disabled = true; $('refreshBtn').classList.add('spin');
+  if (first) showStage('loading');
+  else if (!opts.auto) setSource('loading', 'Reading Google Sheets\u2026');
+  try {
+    const { body, text } = await fetchFeed();
+    if (!body || body.ok !== true) {
+      throw new Error(body && body.code === 'key'
+        ? 'The access key doesn\u2019t match. DATA_KEY in this file must equal ACCESS_KEY in the Apps Script.'
+        : `The Apps Script reported a problem: ${(body && body.error) || 'no data'}`);
+    }
+    if (!Array.isArray(body.rows)) throw new Error('The web app returned data in an unexpected shape.');
+    const sig = hashText(text.replace(/"built":"[^"]*"/, ''));
+    const wasFile = state.source && state.source.kind !== 'live';
+    state.live.syncedAt = new Date();
+    state.live.lastError = null;
+    if (sig !== state.live.sig || wasFile || first) {
+      state.live.sig = sig;
+      const source = { name: body.source || 'Google Sheets', kind:'live', built: body.built, warnings: body.warnings || [] };
+      loadRaws(() => rawFromSnapshot(body), body.density, source, { refresh: !first && !wasFile });
+    } else {
+      showSourceStatus(); renderFooter();                    // nothing changed: keep the view as it is
+    }
+  } catch (err) {
+    console.error(err);
+    state.live.lastError = err.message || String(err);
+    if (!state.loads.length) showStage('error', 'Couldn\u2019t load the data', state.live.lastError);
+    else if (state.source && state.source.kind === 'live') showSourceStatus();
+    else setSource('err', `Couldn\u2019t reach Google Sheets. Still showing ${state.source.name}.`, state.live.lastError);
+  } finally {
+    state.live.busy = false;
+    $('refreshBtn').disabled = false; $('refreshBtn').classList.remove('spin');
+  }
+}
+function showStage(kind, title, detail){
+  document.body.classList.add('nodata');
+  const box = $('stage');
+  const fileBtn = '<button class="btn" data-act="file">Open a workbook file instead</button>';
+  if (kind === 'loading') {
+    setSource('loading', 'Connecting to Google Sheets\u2026');
+    box.innerHTML = '<div class="stage-card"><div class="loader" aria-hidden="true"></div><h2>Reading the Cleanaway SA sheet</h2><p>Fetching every load from Google Sheets. This usually takes a few seconds.</p></div>';
+  } else if (kind === 'setup') {
+    setSource('err', 'Not connected to Google Sheets yet');
+    box.innerHTML = `<div class="stage-card"><h2>Connect this dashboard to Google Sheets</h2>
+      <p>Open this file in a text editor and paste your Apps Script web app URL into <code>DATA_URL</code> near the top, then reload.</p>
+      <ol><li>At script.google.com create a new project, paste in <code>Code_standalone.gs</code>, put the sheet address in <code>SHEET_URL</code>, save and run <code>testFeed</code>.</li>
+      <li>Deploy \u203a New deployment \u203a Web app, execute as <b>Me</b>, access <b>Anyone</b>.</li>
+      <li>Copy the URL ending in <code>/exec</code> into <code>DATA_URL</code>.</li></ol>
+      <div class="stage-actions">${fileBtn}</div></div>`;
+  } else {
+    setSource('err', title);
+    box.innerHTML = `<div class="stage-card"><h2>${esc(title)}</h2><p>${esc(detail)}</p>
+      <div class="stage-actions"><button class="btn primary" data-act="retry">Try again</button>${fileBtn}</div></div>`;
+  }
+}
+function startAutoRefresh(){
+  const min = Number(SETTINGS.AUTO_REFRESH_MINUTES);
+  if (!(min > 0)) return;
+  clearInterval(state.live.timer);
+  state.live.timer = setInterval(() => refreshLive({ auto:true }), min * 60000);
+}
+
+function init(){
+  wire();
+  if (!window.echarts) setSource('err', 'Charts couldn\u2019t load. Check your internet connection; tables still work.');
+  refreshLive({ first:true });
+  startAutoRefresh();
+}
+document.addEventListener('DOMContentLoaded', init);
+
+</script>
+</body>
+</html>

@@ -339,7 +339,7 @@ footer{margin-top:18px;font-size:12px;color:var(--ink-3);line-height:1.6}
 <div class="app">
   <aside class="sidebar" aria-label="Report navigation">
     <div class="wordmark">TRASTE</div>
-    <div class="wordmark-sub">Cleanaway SA<br>Construction &amp; demolition loads</div>
+    <div class="wordmark-sub">Construction &amp; demolition loads</div>
     <ul class="nav" id="nav">
       <li><a href="#overview" class="on">Overview</a></li>
       <li><a href="#monthly">Month by month</a></li>
@@ -359,7 +359,7 @@ footer{margin-top:18px;font-size:12px;color:var(--ink-3);line-height:1.6}
         <div class="source">
           <span class="source-pill" id="sourcePill" role="status"><i class="dot"></i><span id="sourceText">Loading data…</span></span>
           <button class="btn" id="refreshBtn" title="Read the latest data from Google Sheets"><svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" d="M20 12a8 8 0 1 1-2.34-5.66M20 4v4.5h-4.5"/></svg>Refresh</button>
-          <button class="btn ghost" id="loadBtn" title="Offline backup: open a Cleanaway SA .xlsx export instead of the live sheet">Open file</button>
+          <button class="btn ghost" id="loadBtn" title="Offline backup: open an .xlsx export of the workbook instead of the live sheet">Open file</button>
           <input type="file" id="fileInput" accept=".xlsx,.xls" hidden>
           <button class="btn primary" id="exportBtn">Export CSV</button>
         </div>
@@ -1787,7 +1787,7 @@ function loadScript(src){
   });
 }
 async function loadWorkbook(file){
-  setSource('loading', `Reading ${file.name}…`);
+  setSource('loading', 'Reading the workbook…');
   try {
     await loadScript(CONFIG.XLSX_CDN);
     const wb = XLSX.read(await file.arrayBuffer(), { type:'array', cellDates:false });
@@ -1797,19 +1797,19 @@ async function loadWorkbook(file){
       if (!out.raws.length) throw new Error('The Waste Loads sheet has no load rows.');
       density = out.density;
       return out.raws;
-    }, null, { name: file.name, kind:'file' });
+    }, null, { name: 'Workbook file', kind:'file' });
     state.raw.density = state.density = density;
   } catch (err) {
     console.error(err);
     const prev = state.source;
-    if (prev) setSource('err', `Couldn't open ${file.name}: ${err.message || err}`, `Still showing ${prev.name}`);
-    else showStage('error', `Couldn\u2019t open ${file.name}`, err.message || String(err));
+    if (prev) setSource('err', `Couldn't open that file: ${err.message || err}`, prev.kind === 'live' ? 'Still showing the live data' : 'Still showing the previous file');
+    else showStage('error', 'Couldn\u2019t open that file', err.message || String(err));
   }
 }
 function renderFooter(){
   const dens = MATERIALS.map(m => `${m.key} ${m.density}`).join(', ');
   const src = state.source || {};
-  const where = src.kind === 'live' ? `${esc(src.name)} (Google Sheets, read live at ${clock(state.live.syncedAt)})` : `${esc(src.name || '')} (file opened on this computer)`;
+  const where = src.kind === 'live' ? `Google Sheets, read live at ${clock(state.live.syncedAt)}` : 'a workbook file opened on this computer';
   const warn = (src.warnings || []).length ? ` <strong>Sheet notes:</strong> ${src.warnings.map(esc).join(' ')}` : '';
   $('footer').innerHTML = `Tonnage totals use loads weighing more than 0 t and up to ${CONFIG.MAX_LOAD_T} t; lighter or heavier entries stay in the table, flagged for checking. ` +
     `Recycled and landfill tonnes come from loads whose material mix adds to 100%, split with the Density sheet (t/m³): ${dens}. ` +
@@ -2002,7 +2002,7 @@ async function refreshLive(opts){
     state.live.lastError = null;
     if (sig !== state.live.sig || wasFile || first) {
       state.live.sig = sig;
-      const source = { name: body.source || 'Google Sheets', kind:'live', built: body.built, warnings: body.warnings || [] };
+      const source = { name: 'Google Sheets', kind:'live', built: body.built, warnings: body.warnings || [] };
       loadRaws(() => rawFromSnapshot(body), body.density, source, { refresh: !first && !wasFile });
     } else {
       showSourceStatus(); renderFooter();                    // nothing changed: keep the view as it is
@@ -2012,7 +2012,7 @@ async function refreshLive(opts){
     state.live.lastError = err.message || String(err);
     if (!state.loads.length) showStage('error', 'Couldn\u2019t load the data', state.live.lastError);
     else if (state.source && state.source.kind === 'live') showSourceStatus();
-    else setSource('err', `Couldn\u2019t reach Google Sheets. Still showing ${state.source.name}.`, state.live.lastError);
+    else setSource('err', 'Couldn\u2019t reach Google Sheets. Still showing the workbook file.', state.live.lastError);
   } finally {
     state.live.busy = false;
     $('refreshBtn').disabled = false; $('refreshBtn').classList.remove('spin');
@@ -2024,7 +2024,7 @@ function showStage(kind, title, detail){
   const fileBtn = '<button class="btn" data-act="file">Open a workbook file instead</button>';
   if (kind === 'loading') {
     setSource('loading', 'Connecting to Google Sheets\u2026');
-    box.innerHTML = '<div class="stage-card"><div class="loader" aria-hidden="true"></div><h2>Reading the Cleanaway SA sheet</h2><p>Fetching every load from Google Sheets. This usually takes a few seconds.</p></div>';
+    box.innerHTML = '<div class="stage-card"><div class="loader" aria-hidden="true"></div><h2>Reading the live Google Sheet</h2><p>Fetching every load from Google Sheets. This usually takes a few seconds.</p></div>';
   } else if (kind === 'setup') {
     setSource('err', 'Not connected to Google Sheets yet');
     box.innerHTML = `<div class="stage-card"><h2>Connect this dashboard to Google Sheets</h2>
